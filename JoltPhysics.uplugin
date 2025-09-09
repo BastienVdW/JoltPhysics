@@ -1,0 +1,24 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "JoltPhysics",
+	"Description": "",
+	"Category": "Gameplay",
+	"CreatedBy": "Jorrit Rouwe",
+	"CreatedByURL": "",
+	"DocsURL": "https://github.com/jrouwe/JoltPhysics",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"CanContainContent": false,
+	"IsBetaVersion": false,
+	"Installed": false,
+	"EnabledByDefault" : true,
+	"Modules": [
+		{
+			"Name": "JoltPhysics",
+			"Type": "Runtime",
+			"LoadingPhase": "PreLoadingScreen"
+		}
+	]
+}
