@@ -22,7 +22,7 @@ This plugin is based on the original **Jolt Physics** library:
 
 This Unreal Engine integration provides:
 
-- Native UE5 integration with Blueprint support
+- (TODO) Native UE5 integration with Blueprint support
 - Deterministic physics for multiplayer/networked games
 - High-performance simulation suitable for large-scale physics
 - Compatible with Unreal Engine's existing physics workflow
