@@ -11,7 +11,6 @@ public class JoltPhysics : ModuleRules
 		bAllowConfidentialPlatformDefines = true;
 
 		PCHUsage = PCHUsageMode.NoPCHs;
-		CppStandard = CppStandardVersion.Cpp17;
 
 		PublicDependencyModuleNames.AddRange(new string[] { });
 
