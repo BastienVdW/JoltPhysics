@@ -11,6 +11,7 @@ public class JoltPhysics : ModuleRules
 		bAllowConfidentialPlatformDefines = true;
 
 		PCHUsage = PCHUsageMode.NoPCHs;
+		bUseUnity = false;
 
 		PublicDependencyModuleNames.AddRange(new string[] { });
 
