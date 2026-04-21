@@ -76,7 +76,7 @@ void JobSystemUETask::QueueJob(Job *inJob)
 	{
 		inJob->Execute();
 		inJob->Release();
-		--mPendingTaskCount;
+		NotifyTaskComplete();
 	});
 }
 
@@ -91,12 +91,19 @@ void JobSystemUETask::QueueJobs(Job **inJobs, uint inNumJobs)
 		QueueJob(*job);
 }
 
+void JobSystemUETask::NotifyTaskComplete()
+{
+	if (--mPendingTaskCount == 0)
+	{
+		std::lock_guard<std::mutex> lock(mTaskMutex);
+		mTaskComplete.notify_all();
+	}
+}
+
 void JobSystemUETask::WaitAllTasks()
 {
-	while (mPendingTaskCount.load() > 0)
-	{
-		std::this_thread::yield();
-	}
+	std::unique_lock<std::mutex> lock(mTaskMutex);
+	mTaskComplete.wait(lock, [this] { return mPendingTaskCount.load() == 0; });
 }
 
 JPH_NAMESPACE_END

@@ -6,6 +6,8 @@
 #include "CoreMinimal.h"
 #include <Jolt/Core/JobSystemWithBarrier.h>
 #include <Jolt/Core/FixedSizeFreeList.h>
+#include <condition_variable>
+#include <mutex>
 
 JPH_NAMESPACE_BEGIN
 
@@ -43,11 +45,16 @@ protected:
 	virtual void					QueueJobs(Job **inJobs, uint inNumJobs) override;
 	virtual void					FreeJob(Job *inJob) override;
 
+protected:
+	void							NotifyTaskComplete();
+
 private:
 	using AvailableJobs = FixedSizeFreeList<Job>;
 	AvailableJobs					mJobs;
 
 	mutable atomic<int32>			mPendingTaskCount { 0 };
+	mutable std::mutex				mTaskMutex;
+	mutable std::condition_variable	mTaskComplete;
 };
 
 JPH_NAMESPACE_END
