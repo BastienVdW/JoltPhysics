@@ -51,13 +51,24 @@ public:
 	virtual void SetRotation(const FQuat& Rotation) const;
 	virtual void GetPositionAndRotation(FVector& OutPosition, FQuat& OutRotation) const;
 	virtual void SetPositionAndRotation(const FVector& Position, const FQuat& Rotation) const;
+	void GetPosition(FVector& OutPosition) const;
+	FTransform GetTransform() const;
+	void SetRotation(const FRotator& Rotation) const;
+	void GetRotation(FQuat& OutRotation) const;
+	FVector GetForwardVector() const;
+	FVector GetRightVector() const;
+
+	bool CollideShape(const FVector& Position, uint32& OutContactBodyID, FVector& OutContactPosition, FVector& OutContactNormal) const;
+	bool ShapeCast(const FVector& Position, const FVector& Direction, float Distance,
+		uint32& OutContactBodyID, FVector& OutContactPosition, FVector& OutContactNormal) const;
+	float GetMass() const;
 
 	void SetWorldContextObject(UObject* Object);
 	UObject* GetWorldContextObject() const;
 
 #if WITH_JOLT_PHYSICS
-	void SetPhysicsSystem(const TWeakPtr<JPH::PhysicsSystem>& System) { PhysicsSystem = System; }
-	void SetTempAllocator(const TWeakPtr<JPH::TempAllocator>& InTempAllocator) { TempAllocator = InTempAllocator; }
+	void SetPhysicsSystem(const TWeakPtr<JPH::PhysicsSystem>& System) { PhysicsSystemWeak = System; }
+	void SetTempAllocator(const TWeakPtr<JPH::TempAllocator>& InTempAllocator) { TempAllocatorWeak = InTempAllocator; }
 #endif // WITH_JOLT_PHYSICS
 
 protected:
@@ -79,7 +90,7 @@ private:
 	TWeakObjectPtr<UObject> WorldContextObject;
 
 #if WITH_JOLT_PHYSICS
-	TWeakPtr<JPH::TempAllocator> TempAllocator;
-	TWeakPtr<JPH::PhysicsSystem> PhysicsSystem;
+	TWeakPtr<JPH::TempAllocator> TempAllocatorWeak;
+	TWeakPtr<JPH::PhysicsSystem> PhysicsSystemWeak;
 #endif // WITH_JOLT_PHYSICS
 };

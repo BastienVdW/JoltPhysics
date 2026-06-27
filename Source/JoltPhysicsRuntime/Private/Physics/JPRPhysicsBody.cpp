@@ -12,7 +12,11 @@
 #include <Jolt/Jolt.h>
 #include <Jolt/Core/TempAllocator.h>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
+#include <Jolt/Physics/Collision/CollideShape.h>
+#include <Jolt/Physics/Collision/ShapeCast.h>
 #include <Jolt/Physics/PhysicsSystem.h>
+
+using namespace JPH;
 #endif // WITH_JOLT_PHYSICS
 
 FJPRPhysicsBody::FJPRPhysicsBody() = default;
@@ -138,6 +142,262 @@ void FJPRPhysicsBody::SetPositionAndRotation(const FVector& Position, const FQua
 #endif // WITH_JOLT_PHYSICS
 }
 
+void FJPRPhysicsBody::GetPosition(FVector& OutPosition) const
+{
+	FQuat Rotation = FQuat::Identity;
+	GetPositionAndRotation(OutPosition, Rotation);
+}
+
+FTransform FJPRPhysicsBody::GetTransform() const
+{
+	FVector Position = FVector::ZeroVector;
+	FQuat Rotation = FQuat::Identity;
+	GetPositionAndRotation(Position, Rotation);
+
+	return FTransform(Rotation, Position);
+}
+
+void FJPRPhysicsBody::SetRotation(const FRotator& Rotation) const
+{
+	SetRotation(Rotation.Quaternion());
+}
+
+void FJPRPhysicsBody::GetRotation(FQuat& OutRotation) const
+{
+#if WITH_JOLT_PHYSICS
+	if (body_id.IsValid())
+	{
+		const Quat Rotation = GetBodyInterface().GetRotation(*body_id.Get());
+		OutRotation = JoltPhysicsToUnreal(FQuat(Rotation.GetX(), Rotation.GetY(), Rotation.GetZ(), Rotation.GetW()));
+	}
+#endif // WITH_JOLT_PHYSICS
+}
+
+bool FJPRPhysicsBody::CollideShape(const FVector& Position, uint32& OutContactBodyID, FVector& OutContactPosition,
+	FVector& OutContactNormal) const
+{
+#if WITH_JOLT_PHYSICS
+	if (!body_id.IsValid())
+	{
+		return false;
+	}
+	
+	RefConst<Shape> shape = GetBodyInterface().GetShape(*body_id.Get());
+
+	const FVector inJoltRayOrigin = UnrealToJoltPhysics(Position);
+	const RVec3 inOrigin(inJoltRayOrigin.X, inJoltRayOrigin.Y, inJoltRayOrigin.Z);
+	
+	const ObjectLayer object_layer = GetBodyInterface().GetObjectLayer(*body_id.Get());
+	const DefaultBroadPhaseLayerFilter default_broadphase_layer_filter = GetPhysicsSystem().GetDefaultBroadPhaseLayerFilter(object_layer);
+	const BroadPhaseLayerFilter& broadphase_layer_filter = default_broadphase_layer_filter;
+	
+	const DefaultObjectLayerFilter default_object_layer_filter = GetPhysicsSystem().GetDefaultLayerFilter(object_layer);
+	const ObjectLayerFilter &object_layer_filter = default_object_layer_filter;
+
+	const IgnoreSingleBodyFilter default_body_filter(*body_id.Get());
+	const BodyFilter &body_filter = default_body_filter;
+	
+	RMat44 start_position = GetBodyInterface().GetWorldTransform(*body_id.Get());
+	start_position.SetTranslation(inOrigin);
+	
+	class MyCollector : public CollideShapeCollector
+	{
+	public:
+		MyCollector(PhysicsSystem &inPhysicsSystem) :
+			mPhysicsSystem(inPhysicsSystem)
+		{
+		}
+
+		virtual void		AddHit(const CollideShapeResult &inResult) override
+		{
+			// Test if this collision is closer than the previous one
+			if (inResult.GetEarlyOutFraction() < GetEarlyOutFraction())
+			{
+				// Lock the body
+				BodyLockRead lock(mPhysicsSystem.GetBodyLockInterfaceNoLock(), inResult.mBodyID2);
+				JPH_ASSERT(lock.Succeeded()); // When this runs all bodies are locked so this should not fail
+				const Body *body = &lock.GetBody();
+
+				if (body->IsSensor())
+					return;
+
+				// Test that we're not hitting a vertical wall
+				RVec3 contact_pos = inResult.mContactPointOn1;
+				Vec3 normal = body->GetWorldSpaceSurfaceNormal(inResult.mSubShapeID2, contact_pos);
+				
+				// Update early out fraction to this hit
+				UpdateEarlyOutFraction(inResult.GetEarlyOutFraction());
+
+				// Get the contact properties
+				mBody = body;
+				mContactPosition = contact_pos;
+				mContactNormal = normal;
+			}
+		}
+
+		// Configuration
+		PhysicsSystem &		mPhysicsSystem;
+
+		// Resulting closest collision
+		const Body *		mBody = nullptr;
+		RVec3				mContactPosition = RVec3::sZero();
+		Vec3				mContactNormal = Vec3::sZero();
+	};
+
+	CollideShapeSettings settings;
+
+	MyCollector collector(GetPhysicsSystem());
+	GetPhysicsSystem().GetNarrowPhaseQueryNoLock().CollideShape(shape, Vec3(1.0f, 1.0f, 1.0f), start_position,
+		settings, shape->GetCenterOfMass(), collector, broadphase_layer_filter, object_layer_filter, body_filter);
+	if (collector.mBody == nullptr)
+	{
+		return false;		
+	}
+
+	OutContactBodyID = collector.mBody->GetID().GetIndexAndSequenceNumber();
+	OutContactPosition = JoltPhysicsToUnreal(
+		FVector(collector.mContactPosition.GetX(), collector.mContactPosition.GetY(), collector.mContactPosition.GetZ()));
+	OutContactNormal = JoltPhysicsToUnrealDirection(
+		FVector(collector.mContactNormal.GetX(), collector.mContactNormal.GetY(), collector.mContactNormal.GetZ()));
+
+	return true;
+#else // WITH_JOLT_PHYSICS
+	return false;
+#endif // WITH_JOLT_PHYSICS
+}
+
+bool FJPRPhysicsBody::ShapeCast(const FVector& Position, const FVector& Direction, float Distance,
+                                     uint32& OutContactBodyID, FVector& OutContactPosition, FVector& OutContactNormal) const
+{
+#if WITH_JOLT_PHYSICS
+	if (!body_id.IsValid())
+	{
+		return false;
+	}
+	
+	RefConst<Shape> shape = GetBodyInterface().GetShape(*body_id.Get());
+
+	const FVector inJoltRayOrigin = UnrealToJoltPhysics(Position);
+	const RVec3 inOrigin(inJoltRayOrigin.X, inJoltRayOrigin.Y, inJoltRayOrigin.Z);
+	
+	const FVector inJoltRayDirection = UnrealToJoltPhysicsDirection(Direction);
+	const Vec3 inDirection(inJoltRayDirection.X, inJoltRayDirection.Y, inJoltRayDirection.Z);
+
+	const float ray_length = Distance * UnrealToJoltPhysicsUnitScale;
+
+	const ObjectLayer object_layer = GetBodyInterface().GetObjectLayer(*body_id.Get());
+	const DefaultBroadPhaseLayerFilter default_broadphase_layer_filter = GetPhysicsSystem().GetDefaultBroadPhaseLayerFilter(object_layer);
+	const BroadPhaseLayerFilter& broadphase_layer_filter = default_broadphase_layer_filter;
+	
+	const DefaultObjectLayerFilter default_object_layer_filter = GetPhysicsSystem().GetDefaultLayerFilter(object_layer);
+	const ObjectLayerFilter &object_layer_filter = default_object_layer_filter;
+
+	const IgnoreSingleBodyFilter default_body_filter(*body_id.Get());
+	// const BodyFilter &body_filter = mBodyFilter != nullptr? *mBodyFilter : default_body_filter;
+	const BodyFilter &body_filter = default_body_filter;
+
+	RMat44 start_position = GetBodyInterface().GetWorldTransform(*body_id.Get());
+	start_position.SetTranslation(inOrigin);
+	
+	RShapeCast shape_cast(shape, Vec3::sReplicate(1.0f),
+		start_position, inDirection * ray_length);
+
+	class MyCollector : public CastShapeCollector
+	{
+	public:
+		MyCollector(PhysicsSystem &inPhysicsSystem, const RShapeCast &inShape) :
+			mPhysicsSystem(inPhysicsSystem),
+			mShape(inShape)
+		{
+		}
+
+		virtual void		AddHit(const ShapeCastResult &inResult) override
+		{
+			// Test if this collision is closer than the previous one
+			if (inResult.mFraction < GetEarlyOutFraction())
+			{
+				// Lock the body
+				BodyLockRead lock(mPhysicsSystem.GetBodyLockInterfaceNoLock(), inResult.mBodyID2);
+				JPH_ASSERT(lock.Succeeded()); // When this runs all bodies are locked so this should not fail
+				const Body *body = &lock.GetBody();
+
+				if (body->IsSensor())
+					return;
+
+				// Test that we're not hitting a vertical wall
+				RVec3 contact_pos = mShape.GetPointOnRay(inResult.mFraction);
+				Vec3 normal = body->GetWorldSpaceSurfaceNormal(inResult.mSubShapeID2, contact_pos);
+				
+				// Update early out fraction to this hit
+				UpdateEarlyOutFraction(inResult.mFraction);
+
+				// Get the contact properties
+				mBody = body;
+				mContactPosition = contact_pos;
+				mContactNormal = normal;
+			}
+		}
+
+		// Configuration
+		PhysicsSystem &		mPhysicsSystem;
+		RShapeCast			mShape;
+
+		// Resulting closest collision
+		const Body *		mBody = nullptr;
+		RVec3				mContactPosition = RVec3::sZero();
+		Vec3				mContactNormal = Vec3::sZero();
+	};
+
+	ShapeCastSettings settings;
+
+	MyCollector collector(GetPhysicsSystem(), shape_cast);
+	GetPhysicsSystem().GetNarrowPhaseQueryNoLock().CastShape(shape_cast, settings, shape->GetCenterOfMass(),
+		collector, broadphase_layer_filter, object_layer_filter, body_filter);
+	if (collector.mBody == nullptr)
+	{
+		return false;		
+	}
+	
+	OutContactBodyID = collector.mBody->GetID().GetIndexAndSequenceNumber();
+	OutContactPosition = JoltPhysicsToUnreal(
+		FVector(collector.mContactPosition.GetX(), collector.mContactPosition.GetY(), collector.mContactPosition.GetZ()));
+	OutContactNormal = JoltPhysicsToUnrealDirection(
+		FVector(collector.mContactNormal.GetX(), collector.mContactNormal.GetY(), collector.mContactNormal.GetZ()));
+
+	return true;
+#else // WITH_JOLT_PHYSICS
+	return false;
+#endif // WITH_JOLT_PHYSICS
+}
+
+float FJPRPhysicsBody::GetMass() const
+{
+#if WITH_JOLT_PHYSICS
+	if (body_id.IsValid())
+	{
+		BodyLockRead lock(GetPhysicsSystem().GetBodyLockInterfaceNoLock(), *body_id.Get());
+		JPH_ASSERT(lock.Succeeded()); // When this runs all bodies are locked so this should not fail
+		const Body *body = &lock.GetBody();
+		return body->GetBodyCreationSettings().GetMassProperties().mMass;
+	}
+#endif // WITH_JOLT_PHYSICS
+	return 0.0f;
+}
+
+FVector FJPRPhysicsBody::GetForwardVector() const
+{
+	FQuat Rotation = FQuat::Identity;
+	GetRotation(Rotation);
+	return Rotation.GetForwardVector();
+}
+
+FVector FJPRPhysicsBody::GetRightVector() const
+{
+	FQuat Rotation = FQuat::Identity;
+	GetRotation(Rotation);
+	return Rotation.GetRightVector();
+}
+
 void FJPRPhysicsBody::SetWorldContextObject(UObject* Object)
 {
 	WorldContextObject = Object;
@@ -164,19 +424,19 @@ void FJPRPhysicsBody::SetBodyID(const JPH::BodyID& InBodyID)
 
 JPH::BodyInterface& FJPRPhysicsBody::GetBodyInterface() const
 {
-	check(PhysicsSystem.IsValid());
-	return PhysicsSystem.Pin()->GetBodyInterface();
+	check(PhysicsSystemWeak.IsValid());
+	return PhysicsSystemWeak.Pin()->GetBodyInterface();
 }
 
 JPH::PhysicsSystem& FJPRPhysicsBody::GetPhysicsSystem() const
 {
-	check(PhysicsSystem.IsValid());
-	return *PhysicsSystem.Pin();
+	check(PhysicsSystemWeak.IsValid());
+	return *PhysicsSystemWeak.Pin();
 }
 
 JPH::TempAllocator& FJPRPhysicsBody::GetTempAllocator() const
 {
-	check(TempAllocator.IsValid());
-	return *TempAllocator.Pin();
+	check(TempAllocatorWeak.IsValid());
+	return *TempAllocatorWeak.Pin();
 }
 #endif // WITH_JOLT_PHYSICS
