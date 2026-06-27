@@ -17,9 +17,8 @@ public class JoltPhysicsRuntime : ModuleRules
 			"Core",
 			"CoreUObject",
 			"Engine",
+			"JoltPhysics",
 			"JoltPhysicsRuntimeCore",
 		});
-
-		PrivateDependencyModuleNames.Add("JoltPhysics");
 	}
 }

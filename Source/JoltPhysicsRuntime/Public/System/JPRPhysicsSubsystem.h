@@ -37,8 +37,6 @@ class JOLTPHYSICSRUNTIME_API UJPRPhysicsSubsystem : public UWorldSubsystem
 	GENERATED_BODY()
 
 public:
-	virtual void TickPhysics(float DeltaTime, int32 CollisionSteps, float TimeDilation = 1.0f);
-
 #if WITH_JOLT_PHYSICS
 	JPH::PhysicsSystem& GetPhysicsSystem() const;
 	JPH::BodyInterface& GetBodyInterface() const;
@@ -47,6 +45,7 @@ public:
 #endif
 
 protected:
+	void StepPhysics(float DeltaTime, int32 CollisionSteps, float TimeDilation = 1.0f);
 	void DeletePhysicsSystem();
 
 #if WITH_JOLT_PHYSICS

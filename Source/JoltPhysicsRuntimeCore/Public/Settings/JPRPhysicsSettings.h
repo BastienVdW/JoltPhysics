@@ -12,7 +12,7 @@
 #include "JPRPhysicsSettings.generated.h"
 
 /** Configuration shared by Unreal systems backed by a Jolt physics world. */
-UCLASS(Abstract, config=Game)
+UCLASS(config=Game, defaultconfig, meta=(DisplayName="Jolt Physics"))
 class JOLTPHYSICSRUNTIMECORE_API UJPRPhysicsSettings : public UDeveloperSettingsBackedByCVars
 {
 	GENERATED_BODY()
