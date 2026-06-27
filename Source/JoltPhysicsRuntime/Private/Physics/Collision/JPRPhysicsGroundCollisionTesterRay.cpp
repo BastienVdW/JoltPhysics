@@ -15,7 +15,7 @@
 JPH_SUPPRESS_WARNINGS
 
 using namespace JPH;
-#endif
+#endif // WITH_JOLT_PHYSICS
 
 FJPRPhysicsGroundCollisionTesterRay::FJPRPhysicsGroundCollisionTesterRay(int32 InObjectLayer, FVector InUp, float InMaxSlopeAngle)
 	: ObjectLayer(InObjectLayer)
@@ -102,4 +102,4 @@ bool FJPRPhysicsGroundCollisionTesterRay::Collide(PhysicsSystem& InPhysicsSystem
 		Collector.ContactNormal.GetX(), Collector.ContactNormal.GetY(), Collector.ContactNormal.GetZ()));
 	return true;
 }
-#endif
+#endif // WITH_JOLT_PHYSICS

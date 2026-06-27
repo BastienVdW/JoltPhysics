@@ -7,14 +7,14 @@
 
 #ifndef WITH_JOLT_PHYSICS
 #define WITH_JOLT_PHYSICS 0
-#endif
+#endif // WITH_JOLT_PHYSICS
 
 #if WITH_JOLT_PHYSICS
 namespace JPH
 {
 	class PhysicsSystem;
 }
-#endif
+#endif // WITH_JOLT_PHYSICS
 
 class JOLTPHYSICSRUNTIME_API FJPRPhysicsGroundCollisionTesterRay
 {
@@ -24,7 +24,7 @@ public:
 #if WITH_JOLT_PHYSICS
 	bool Collide(JPH::PhysicsSystem& InPhysicsSystem, uint32 InBodyID, const FVector& InRayOrigin, const FVector& InRayDirection, float InRayLength,
 		uint32& OutContactBodyID, FVector& OutContactPosition, FVector& OutContactNormal) const;
-#endif
+#endif // WITH_JOLT_PHYSICS
 
 private:
 	int32 ObjectLayer;
