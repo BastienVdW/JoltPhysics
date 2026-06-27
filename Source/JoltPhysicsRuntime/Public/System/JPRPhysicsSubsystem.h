@@ -15,6 +15,8 @@
 namespace JPH
 {
 	class BodyInterface;
+	class BodyActivationListener;
+	class ContactListener;
 	class BroadPhaseLayerInterface;
 	class JobSystemThreadPool;
 	class ObjectLayerPairFilter;
@@ -24,6 +26,8 @@ namespace JPH
 	class TempAllocator;
 }
 #endif
+
+class UJPRPhysicsLayerDataAsset;
 
 /**
  * Unreal-facing owner for a Jolt physics world.
@@ -46,6 +50,11 @@ public:
 
 protected:
 	void StepPhysics(float DeltaTime, int32 CollisionSteps, float TimeDilation = 1.0f);
+
+#if WITH_JOLT_PHYSICS
+	void CreatePhysicsSystem(const UJPRPhysicsLayerDataAsset& PhysicsLayer, JPH::BodyActivationListener* BodyActivationListener,
+		JPH::ContactListener* ContactListener, const TSharedPtr<JPH::StateRecorderFilter>& InStateRecorderFilter);
+#endif
 	void DeletePhysicsSystem();
 
 #if WITH_JOLT_PHYSICS
