@@ -68,6 +68,8 @@ void UJPRPhysicsSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 void UJPRPhysicsSubsystem::Deinitialize()
 {
+	ForceEndPhysicsSimulation();
+
 	Super::Deinitialize();
 
 	PhysicsLayer = nullptr;
@@ -90,7 +92,8 @@ void UJPRPhysicsSubsystem::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 	
 	const UJPRPhysicsSettings* PhysicsSettings = GetDefault<UJPRPhysicsSettings>();
-	StepPhysics(DeltaTime, PhysicsSettings->CollisionSteps, 1.f);
+	StartPhysicsSimulation(DeltaTime, PhysicsSettings->CollisionSteps, 1.f);
+	ForceEndPhysicsSimulation();
 }
 
 TStatId UJPRPhysicsSubsystem::GetStatId() const
@@ -98,18 +101,95 @@ TStatId UJPRPhysicsSubsystem::GetStatId() const
 	RETURN_QUICK_DECLARE_CYCLE_STAT(UJPRPhysicsSubsystem, STATGROUP_Tickables);
 }
 
-void UJPRPhysicsSubsystem::StepPhysics(const float DeltaTime, const int32 CollisionSteps, const float TimeDilation)
+void UJPRPhysicsSubsystem::CreatePhysicsSystem()
 {
+#if WITH_JOLT_PHYSICS
+	JPH::Trace = TraceImpl;
+	JPH_IF_ENABLE_ASSERTS(JPH::AssertFailed = AssertFailedImpl;)
+
+	JPH::RegisterDefaultAllocator();
+	if (JPH::Factory::sInstance == nullptr)
+	{
+		JPH::Factory::sInstance = new JPH::Factory();
+		JPH::RegisterTypes();
+	}
+
+	const UJPRPhysicsSettings* PhysicsSettings = GetDefault<UJPRPhysicsSettings>();
+	TempAllocator = MakeShareable<JPH::TempAllocator>(new JPH::TempAllocatorImpl(10 * 1024 * 1024));
+	JobSystem = MakeShared<JPH::JobSystemThreadPool>(JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsBarriers, PhysicsSettings->MaxNumThreads);
+	BroadPhaseLayerInterface = JPR::Private::CreateBroadPhaseLayerInterface(*PhysicsLayer);
+	ObjectVsBroadPhaseLayerFilter = JPR::Private::CreateObjectVsBroadPhaseLayerFilter(*PhysicsLayer);
+	ObjectLayerPairFilter = JPR::Private::CreateObjectLayerPairFilter(*PhysicsLayer);
+	StateRecorderFilter = MakeShared<FJPRStateRecorderFilter>([this](const uint32 BodyID) { return ShouldRestorePhysicsBody(BodyID); });
+	BodyActivationListener = MakeShared<FJPRBodyActivationListener>();
+	ContactListener = MakeShared<FJPRContactListener>();
+
+	PhysicsSystem = MakeShared<JPH::PhysicsSystem>();
+	PhysicsSystem->Init(PhysicsSettings->MaxBodies, PhysicsSettings->NumBodyMutexes, PhysicsSettings->MaxBodyPairs,
+		PhysicsSettings->MaxContactConstraints, *BroadPhaseLayerInterface, *ObjectVsBroadPhaseLayerFilter, *ObjectLayerPairFilter);
+	PhysicsSystem->SetBodyActivationListener(BodyActivationListener.Get());
+	PhysicsSystem->SetContactListener(ContactListener.Get());
+#endif // WITH_JOLT_PHYSICS
+}
+
+void UJPRPhysicsSubsystem::DeletePhysicsSystem()
+{
+	ForceEndPhysicsSimulation();
+
+#if WITH_JOLT_PHYSICS
+	PhysicsSystem.Reset();
+	StateRecorderFilter.Reset();
+	ContactListener.Reset();
+	BodyActivationListener.Reset();
+	ObjectLayerPairFilter.Reset();
+	ObjectVsBroadPhaseLayerFilter.Reset();
+	BroadPhaseLayerInterface.Reset();
+	JobSystem.Reset();
+	TempAllocator.Reset();
+
+	if (JPH::Factory::sInstance != nullptr)
+	{
+		JPH::UnregisterTypes();
+		delete JPH::Factory::sInstance;
+		JPH::Factory::sInstance = nullptr;
+	}
+#endif // WITH_JOLT_PHYSICS
+}
+
+void UJPRPhysicsSubsystem::StartPhysicsSimulation(const float DeltaTime, const int32 CollisionSteps, const float TimeDilation)
+{
+	ForceEndPhysicsSimulation();
+
 	if (HasPhysicsSystem())
 	{
 #if WITH_JOLT_PHYSICS
 		check(PhysicsSystem.IsValid());
 		check(TempAllocator.IsValid());
 		check(JobSystem.IsValid());
+		bIsSimulationRunning.Store(true);
 		PhysicsSystem->Update(DeltaTime * TimeDilation, CollisionSteps, TempAllocator.Get(), JobSystem.Get());
-		JobSystem->WaitThreads();
 #endif // WITH_JOLT_PHYSICS
 	}
+}
+
+void UJPRPhysicsSubsystem::ForceEndPhysicsSimulation()
+{
+	if (!bIsSimulationRunning.Load())
+	{
+		return;
+	}
+
+#if WITH_JOLT_PHYSICS
+	check(JobSystem.IsValid());
+	JobSystem->WaitThreads();
+#endif // WITH_JOLT_PHYSICS
+
+	bIsSimulationRunning.Store(false);
+}
+
+void UJPRPhysicsSubsystem::CheckPhysicsAccess() const
+{
+	checkf(!IsPhysicsSimulationRunning(), TEXT("%hs Physics body access is not allowed while the physics simulation is running"), __FUNCTION__);
 }
 
 bool UJPRPhysicsSubsystem::HasPhysicsSystem() const
@@ -165,30 +245,10 @@ bool UJPRPhysicsSubsystem::RestorePhysicsState(const TArray<uint8>& StateData, c
 #endif
 }
 
-void UJPRPhysicsSubsystem::DeletePhysicsSystem()
-{
-#if WITH_JOLT_PHYSICS
-	PhysicsSystem.Reset();
-	StateRecorderFilter.Reset();
-	ContactListener.Reset();
-	BodyActivationListener.Reset();
-	ObjectLayerPairFilter.Reset();
-	ObjectVsBroadPhaseLayerFilter.Reset();
-	BroadPhaseLayerInterface.Reset();
-	JobSystem.Reset();
-	TempAllocator.Reset();
-
-	if (JPH::Factory::sInstance != nullptr)
-	{
-		JPH::UnregisterTypes();
-		delete JPH::Factory::sInstance;
-		JPH::Factory::sInstance = nullptr;
-	}
-#endif // WITH_JOLT_PHYSICS
-}
-
 TArray<FJPRContactEvent> UJPRPhysicsSubsystem::ConsumeContactEvents()
 {
+	CheckPhysicsAccess();
+	
 #if WITH_JOLT_PHYSICS
 	return ContactListener.IsValid() ? ContactListener->ConsumeEvents() : TArray<FJPRContactEvent>();
 #else // WITH_JOLT_PHYSICS
@@ -198,6 +258,8 @@ TArray<FJPRContactEvent> UJPRPhysicsSubsystem::ConsumeContactEvents()
 
 int32 UJPRPhysicsSubsystem::GetNumPendingContactEvents() const
 {
+	CheckPhysicsAccess();
+	
 #if WITH_JOLT_PHYSICS
 	return ContactListener.IsValid() ? ContactListener->GetNumEvents() : 0;
 #else // WITH_JOLT_PHYSICS
@@ -207,6 +269,8 @@ int32 UJPRPhysicsSubsystem::GetNumPendingContactEvents() const
 
 void UJPRPhysicsSubsystem::SetBodyObjectLayer(const uint32 BodyID, const uint16 Layer)
 {
+	CheckPhysicsAccess();
+	
 #if WITH_JOLT_PHYSICS
 	GetBodyInterface().SetObjectLayer(JPH::BodyID(BodyID), static_cast<JPH::ObjectLayer>(Layer));
 #endif // WITH_JOLT_PHYSICS
@@ -214,6 +278,8 @@ void UJPRPhysicsSubsystem::SetBodyObjectLayer(const uint32 BodyID, const uint16 
 
 EJPRPhysicsMotionType UJPRPhysicsSubsystem::GetBodyMotionType(const uint32 BodyID) const
 {
+	CheckPhysicsAccess();
+	
 #if WITH_JOLT_PHYSICS
 	return static_cast<EJPRPhysicsMotionType>(GetBodyInterface().GetMotionType(JPH::BodyID(BodyID)));
 #else // WITH_JOLT_PHYSICS
@@ -223,6 +289,8 @@ EJPRPhysicsMotionType UJPRPhysicsSubsystem::GetBodyMotionType(const uint32 BodyI
 
 void UJPRPhysicsSubsystem::SetBodyMotionType(const uint32 BodyID, const EJPRPhysicsMotionType MotionType, const EJPRPhysicsActivation ActivationMode)
 {
+	CheckPhysicsAccess();
+	
 #if WITH_JOLT_PHYSICS
 	GetBodyInterface().SetMotionType(JPH::BodyID(BodyID), static_cast<JPH::EMotionType>(MotionType), static_cast<JPH::EActivation>(ActivationMode));
 #endif // WITH_JOLT_PHYSICS
@@ -230,6 +298,8 @@ void UJPRPhysicsSubsystem::SetBodyMotionType(const uint32 BodyID, const EJPRPhys
 
 bool UJPRPhysicsSubsystem::CreateFixedConstraint(const uint32 BodyID1, const uint32 BodyID2, const bool bActivate)
 {
+	CheckPhysicsAccess();
+	
 #if WITH_JOLT_PHYSICS
 	JPH::FixedConstraintSettings ConstraintSettings;
 	ConstraintSettings.mAutoDetectPoint = true;
@@ -262,6 +332,8 @@ bool UJPRPhysicsSubsystem::CreateFixedConstraint(const uint32 BodyID1, const uin
 
 void UJPRPhysicsSubsystem::RemoveFixedConstraints(const uint32 BodyID1, const uint32 BodyID2)
 {
+	CheckPhysicsAccess();
+	
 #if WITH_JOLT_PHYSICS
 	const JPH::BodyID ConstraintBodies[] = { JPH::BodyID(BodyID1), JPH::BodyID(BodyID2) };
 	const JPH::Constraints Constraints = GetPhysicsSystem().GetConstraints();
@@ -280,46 +352,19 @@ void UJPRPhysicsSubsystem::RemoveFixedConstraints(const uint32 BodyID1, const ui
 #endif // WITH_JOLT_PHYSICS
 }
 
-void UJPRPhysicsSubsystem::CreatePhysicsSystem()
-{
-#if WITH_JOLT_PHYSICS
-	JPH::Trace = TraceImpl;
-	JPH_IF_ENABLE_ASSERTS(JPH::AssertFailed = AssertFailedImpl;)
-
-	JPH::RegisterDefaultAllocator();
-	if (JPH::Factory::sInstance == nullptr)
-	{
-		JPH::Factory::sInstance = new JPH::Factory();
-		JPH::RegisterTypes();
-	}
-
-	const UJPRPhysicsSettings* PhysicsSettings = GetDefault<UJPRPhysicsSettings>();
-	TempAllocator = MakeShareable<JPH::TempAllocator>(new JPH::TempAllocatorImpl(10 * 1024 * 1024));
-	JobSystem = MakeShared<JPH::JobSystemThreadPool>(JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsBarriers, PhysicsSettings->MaxNumThreads);
-	BroadPhaseLayerInterface = JPR::Private::CreateBroadPhaseLayerInterface(*PhysicsLayer);
-	ObjectVsBroadPhaseLayerFilter = JPR::Private::CreateObjectVsBroadPhaseLayerFilter(*PhysicsLayer);
-	ObjectLayerPairFilter = JPR::Private::CreateObjectLayerPairFilter(*PhysicsLayer);
-	StateRecorderFilter = MakeShared<FJPRStateRecorderFilter>([this](const uint32 BodyID) { return ShouldRestorePhysicsBody(BodyID); });
-	BodyActivationListener = MakeShared<FJPRBodyActivationListener>();
-	ContactListener = MakeShared<FJPRContactListener>();
-
-	PhysicsSystem = MakeShared<JPH::PhysicsSystem>();
-	PhysicsSystem->Init(PhysicsSettings->MaxBodies, PhysicsSettings->NumBodyMutexes, PhysicsSettings->MaxBodyPairs,
-		PhysicsSettings->MaxContactConstraints, *BroadPhaseLayerInterface, *ObjectVsBroadPhaseLayerFilter, *ObjectLayerPairFilter);
-	PhysicsSystem->SetBodyActivationListener(BodyActivationListener.Get());
-	PhysicsSystem->SetContactListener(ContactListener.Get());
-#endif // WITH_JOLT_PHYSICS
-}
-
 #if WITH_JOLT_PHYSICS
 JPH::PhysicsSystem& UJPRPhysicsSubsystem::GetPhysicsSystem() const
 {
+	CheckPhysicsAccess();
+	
 	check(PhysicsSystem.IsValid());
 	return *PhysicsSystem;
 }
 
 JPH::BodyInterface& UJPRPhysicsSubsystem::GetBodyInterface() const
 {
+	CheckPhysicsAccess();
+	
 	return GetPhysicsSystem().GetBodyInterface();
 }
 #endif // WITH_JOLT_PHYSICS

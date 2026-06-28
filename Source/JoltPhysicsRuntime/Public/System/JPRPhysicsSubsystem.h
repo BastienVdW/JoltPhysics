@@ -57,6 +57,10 @@ class JOLTPHYSICSRUNTIME_API UJPRPhysicsSubsystem : public UTickableWorldSubsyst
 	GENERATED_BODY()
 
 public:
+	void StartPhysicsSimulation(float DeltaTime, int32 CollisionSteps, float TimeDilation = 1.0f);
+	void ForceEndPhysicsSimulation();
+	bool IsPhysicsSimulationRunning() const { return bIsSimulationRunning.Load(); }
+
 	void SetBodyObjectLayer(uint32 BodyID, uint16 Layer);
 	
 	EJPRPhysicsMotionType GetBodyMotionType(uint32 BodyID) const;
@@ -71,8 +75,8 @@ public:
 #if WITH_JOLT_PHYSICS
 	JPH::PhysicsSystem& GetPhysicsSystem() const;
 	JPH::BodyInterface& GetBodyInterface() const;
-	TSharedPtr<JPH::PhysicsSystem> GetPhysicsSystemPtr() const { return PhysicsSystem; }
-	TSharedPtr<JPH::TempAllocator> GetTempAllocator() const { return TempAllocator; }
+	TSharedPtr<JPH::PhysicsSystem> GetPhysicsSystemPtr() const { CheckPhysicsAccess(); return PhysicsSystem; }
+	TSharedPtr<JPH::TempAllocator> GetTempAllocator() const { CheckPhysicsAccess(); return TempAllocator; }
 #endif // WITH_JOLT_PHYSICS
 	
 	// USubsystem implementation Begin
@@ -88,7 +92,7 @@ public:
 	// FTickableGameObject implementation End
 	
 protected:
-	void StepPhysics(float DeltaTime, int32 CollisionSteps, float TimeDilation = 1.0f);
+	void CheckPhysicsAccess() const;
 	bool HasPhysicsSystem() const;
 	
 	TArray<uint8> SavePhysicsState(const TArray<TSharedPtr<FJPRPhysicsBody>>& Bodies) const;
@@ -101,6 +105,8 @@ protected:
 
 	UPROPERTY(Transient)
 	TObjectPtr<const class UJPRPhysicsLayerDataAsset> PhysicsLayer;
+
+	TAtomic<bool> bIsSimulationRunning{ false };
 	
 #if WITH_JOLT_PHYSICS
 	TSharedPtr<JPH::TempAllocator> TempAllocator;
