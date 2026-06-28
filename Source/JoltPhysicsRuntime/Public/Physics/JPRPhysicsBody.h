@@ -60,13 +60,13 @@ public:
 	FVector GetForwardVector() const;
 	FVector GetRightVector() const;
 	
-	void AddLinearVelocityPerSecond(const FVector& LinearVelocity);
-	void AddLinearAndAngularVelocityPerSecond(const FVector& LinearVelocity, const FVector& AngularVelocityDegrees);
-	void SetLinearAndAngularVelocityPerSecond(const FVector& LinearVelocity, const FVector& AngularVelocityDegrees);
-	void SetLinearVelocityPerSecond(const FVector& LinearVelocity);
-	FVector GetLinearVelocityPerSecond() const;
-	void SetAngularVelocityPerSecond(const FVector& AngularVelocityDegrees);
-	FVector GetAngularVelocityPerSecond() const;
+	virtual void AddLinearVelocityPerSecond(const FVector& LinearVelocity);
+	virtual void AddLinearAndAngularVelocityPerSecond(const FVector& LinearVelocity, const FVector& AngularVelocityDegrees);
+	virtual void SetLinearAndAngularVelocityPerSecond(const FVector& LinearVelocity, const FVector& AngularVelocityDegrees);
+	virtual void SetLinearVelocityPerSecond(const FVector& LinearVelocity);
+	virtual FVector GetLinearVelocityPerSecond() const;
+	virtual void SetAngularVelocityPerSecond(const FVector& AngularVelocityDegrees);
+	virtual FVector GetAngularVelocityPerSecond() const;
 
 	bool CollideShape(const FVector& Position, uint32& OutContactBodyID, FVector& OutContactPosition, FVector& OutContactNormal) const;
 	bool ShapeCast(const FVector& Position, const FVector& Direction, float Distance,

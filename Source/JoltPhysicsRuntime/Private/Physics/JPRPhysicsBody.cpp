@@ -10,7 +10,6 @@
 
 #if WITH_JOLT_PHYSICS
 #include <Jolt/Jolt.h>
-#include <Jolt/Core/TempAllocator.h>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 #include <Jolt/Physics/Collision/CollideShape.h>
 #include <Jolt/Physics/Collision/ShapeCast.h>
