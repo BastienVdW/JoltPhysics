@@ -6,6 +6,8 @@
 
 #include "System/JPRPhysicsSubsystem.h"
 
+#include "Physics/JPRPhysicsObjectFactory.h"
+
 #include "Physics/JPRPhysicsLayerDataAsset.h"
 #include "Physics/JPRPhysicsLayerFilters.h"
 #include "Physics/JPRPhysicsBody.h"
@@ -52,6 +54,14 @@ namespace
 #endif // JPH_ENABLE_ASSERTS
 }
 #endif // WITH_JOLT_PHYSICS
+
+TSharedPtr<FJPRPhysicsBody> UJPRPhysicsSubsystem::CreateBodyFromShape(const uint32 BodyID, const FInstancedStruct& Shape,
+	const TSubclassOf<UJPRPhysicsObjectFactory>& FactoryClass, const FJPRPhysicsBodyParameters& Params)
+{
+	CheckPhysicsAccess();
+	const UJPRPhysicsObjectFactory* Factory = FactoryClass->GetDefaultObject<UJPRPhysicsObjectFactory>();
+	return Factory->BuildPhysicsObject(this, BodyID, Shape, Params);
+}
 
 void UJPRPhysicsSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {

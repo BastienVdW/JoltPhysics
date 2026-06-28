@@ -26,6 +26,9 @@ namespace JPH
 #endif // WITH_JOLT_PHYSICS
 
 class FJPRPhysicsBody;
+class UJPRPhysicsObjectFactory;
+struct FInstancedStruct;
+struct FJPRPhysicsBodyParameters;
 
 struct JOLTPHYSICSRUNTIME_API FJPRContactEvent
 {
@@ -57,20 +60,23 @@ class JOLTPHYSICSRUNTIME_API UJPRPhysicsSubsystem : public UTickableWorldSubsyst
 	GENERATED_BODY()
 
 public:
+	virtual TSharedPtr<FJPRPhysicsBody> CreateBodyFromShape(uint32 BodyID, const FInstancedStruct& Shape,
+		const TSubclassOf<UJPRPhysicsObjectFactory>& FactoryClass, const FJPRPhysicsBodyParameters& Params);
+
+	virtual void SetBodyObjectLayer(uint32 BodyID, uint16 Layer);
+	
+	virtual EJPRPhysicsMotionType GetBodyMotionType(uint32 BodyID) const;
+	virtual void SetBodyMotionType(uint32 BodyID, EJPRPhysicsMotionType MotionType, EJPRPhysicsActivation ActivationMode);
+	
+	virtual bool CreateFixedConstraint(uint32 BodyID1, uint32 BodyID2, bool bActivate);
+	virtual void RemoveFixedConstraints(uint32 BodyID1, uint32 BodyID2);
+
+	virtual TArray<FJPRContactEvent> ConsumeContactEvents();
+	virtual int32 GetNumPendingContactEvents() const;
+
 	void StartPhysicsSimulation(float DeltaTime, int32 CollisionSteps, float TimeDilation = 1.0f);
 	void ForceEndPhysicsSimulation();
 	bool IsPhysicsSimulationRunning() const { return bIsSimulationRunning.Load(); }
-
-	void SetBodyObjectLayer(uint32 BodyID, uint16 Layer);
-	
-	EJPRPhysicsMotionType GetBodyMotionType(uint32 BodyID) const;
-	void SetBodyMotionType(uint32 BodyID, EJPRPhysicsMotionType MotionType, EJPRPhysicsActivation ActivationMode);
-	
-	bool CreateFixedConstraint(uint32 BodyID1, uint32 BodyID2, bool bActivate);
-	void RemoveFixedConstraints(uint32 BodyID1, uint32 BodyID2);
-
-	TArray<FJPRContactEvent> ConsumeContactEvents();
-	int32 GetNumPendingContactEvents() const;
 	
 #if WITH_JOLT_PHYSICS
 	JPH::PhysicsSystem& GetPhysicsSystem() const;
