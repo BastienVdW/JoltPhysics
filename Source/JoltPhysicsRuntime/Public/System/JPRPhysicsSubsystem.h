@@ -15,8 +15,6 @@
 namespace JPH
 {
 	class BodyInterface;
-	class BodyActivationListener;
-	class ContactListener;
 	class BroadPhaseLayerInterface;
 	class JobSystemThreadPool;
 	class ObjectLayerPairFilter;
@@ -28,6 +26,26 @@ namespace JPH
 #endif // WITH_JOLT_PHYSICS
 
 class UJPRPhysicsLayerDataAsset;
+class FJPRBodyActivationListener;
+class FJPRContactListener;
+
+struct JOLTPHYSICSRUNTIME_API FJPRContactEvent
+{
+	uint32 BodyID1 = 0;
+	uint32 BodyID2 = 0;
+	FVector Velocity1 = FVector::ZeroVector;
+	FVector Velocity2 = FVector::ZeroVector;
+	bool bIsStatic1 = false;
+	bool bIsStatic2 = false;
+	bool bIsSensor1 = false;
+	bool bIsSensor2 = false;
+	FVector ImpactPoint1 = FVector::ZeroVector;
+	FVector ImpactPoint2 = FVector::ZeroVector;
+	FVector ImpactNormal1 = FVector::ZeroVector;
+	FVector ImpactNormal2 = FVector::ZeroVector;
+	uint32 SubShapeID1 = 0;
+	uint32 SubShapeID2 = 0;
+};
 
 /**
  * Unreal-facing owner for a Jolt physics world.
@@ -56,10 +74,11 @@ public:
 	
 protected:
 	void StepPhysics(float DeltaTime, int32 CollisionSteps, float TimeDilation = 1.0f);
+	TArray<FJPRContactEvent> ConsumeContactEvents();
+	int32 GetNumPendingContactEvents() const;
 
 #if WITH_JOLT_PHYSICS
-	void CreatePhysicsSystem(const UJPRPhysicsLayerDataAsset& PhysicsLayer, JPH::BodyActivationListener* BodyActivationListener,
-		JPH::ContactListener* ContactListener, const TSharedPtr<JPH::StateRecorderFilter>& InStateRecorderFilter);
+	void CreatePhysicsSystem(const UJPRPhysicsLayerDataAsset& PhysicsLayer, TFunction<bool(uint32)> ShouldSaveBody);
 #endif // WITH_JOLT_PHYSICS
 	void DeletePhysicsSystem();
 
@@ -71,6 +90,8 @@ protected:
 	TSharedPtr<JPH::ObjectVsBroadPhaseLayerFilter> ObjectVsBroadPhaseLayerFilter;
 	TSharedPtr<JPH::ObjectLayerPairFilter> ObjectLayerPairFilter;
 	TSharedPtr<JPH::StateRecorderFilter> StateRecorderFilter;
+	TSharedPtr<FJPRBodyActivationListener> BodyActivationListener;
+	TSharedPtr<FJPRContactListener> ContactListener;
 #endif // WITH_JOLT_PHYSICS
 	
 private:

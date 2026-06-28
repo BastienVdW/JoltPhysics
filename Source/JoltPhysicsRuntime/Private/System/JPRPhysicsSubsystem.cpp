@@ -1,11 +1,15 @@
 // Copyright (C) 2024 Van de Walle Bastien
-// Licensed under the Apache License, Version 2.0
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
 
 #include "System/JPRPhysicsSubsystem.h"
 
 #include "Physics/JPRPhysicsLayerDataAsset.h"
 #include "Physics/JPRPhysicsLayerFilters.h"
 #include "Settings/JPRPhysicsSettings.h"
+#include "System/JPRPhysicsListeners.h"
 
 #if WITH_JOLT_PHYSICS
 #include <Jolt/Jolt.h>
@@ -36,6 +40,8 @@ void UJPRPhysicsSubsystem::DeletePhysicsSystem()
 #if WITH_JOLT_PHYSICS
 	PhysicsSystem.Reset();
 	StateRecorderFilter.Reset();
+	ContactListener.Reset();
+	BodyActivationListener.Reset();
 	ObjectLayerPairFilter.Reset();
 	ObjectVsBroadPhaseLayerFilter.Reset();
 	BroadPhaseLayerInterface.Reset();
@@ -49,6 +55,24 @@ void UJPRPhysicsSubsystem::DeletePhysicsSystem()
 		JPH::Factory::sInstance = nullptr;
 	}
 #endif // WITH_JOLT_PHYSICS
+}
+
+TArray<FJPRContactEvent> UJPRPhysicsSubsystem::ConsumeContactEvents()
+{
+#if WITH_JOLT_PHYSICS
+	return ContactListener.IsValid() ? ContactListener->ConsumeEvents() : TArray<FJPRContactEvent>();
+#else // WITH_JOLT_PHYSICS
+	return {};
+#endif
+}
+
+int32 UJPRPhysicsSubsystem::GetNumPendingContactEvents() const
+{
+#if WITH_JOLT_PHYSICS
+	return ContactListener.IsValid() ? ContactListener->GetNumEvents() : 0;
+#else // WITH_JOLT_PHYSICS
+	return 0;
+#endif
 }
 
 void UJPRPhysicsSubsystem::SetBodyObjectLayer(const uint32 BodyID, const uint16 Layer)
@@ -127,8 +151,7 @@ void UJPRPhysicsSubsystem::RemoveFixedConstraints(const uint32 BodyID1, const ui
 }
 
 #if WITH_JOLT_PHYSICS
-void UJPRPhysicsSubsystem::CreatePhysicsSystem(const UJPRPhysicsLayerDataAsset& PhysicsLayer, JPH::BodyActivationListener* BodyActivationListener,
-	JPH::ContactListener* ContactListener, const TSharedPtr<JPH::StateRecorderFilter>& InStateRecorderFilter)
+void UJPRPhysicsSubsystem::CreatePhysicsSystem(const UJPRPhysicsLayerDataAsset& PhysicsLayer, TFunction<bool(uint32)> ShouldSaveBody)
 {
 	JPH::RegisterDefaultAllocator();
 	if (JPH::Factory::sInstance == nullptr)
@@ -143,17 +166,17 @@ void UJPRPhysicsSubsystem::CreatePhysicsSystem(const UJPRPhysicsLayerDataAsset& 
 	BroadPhaseLayerInterface = JPR::Private::CreateBroadPhaseLayerInterface(PhysicsLayer);
 	ObjectVsBroadPhaseLayerFilter = JPR::Private::CreateObjectVsBroadPhaseLayerFilter(PhysicsLayer);
 	ObjectLayerPairFilter = JPR::Private::CreateObjectLayerPairFilter(PhysicsLayer);
-	StateRecorderFilter = InStateRecorderFilter;
+	StateRecorderFilter = MakeShared<FJPRStateRecorderFilter>(MoveTemp(ShouldSaveBody));
+	BodyActivationListener = MakeShared<FJPRBodyActivationListener>();
+	ContactListener = MakeShared<FJPRContactListener>();
 
 	PhysicsSystem = MakeShared<JPH::PhysicsSystem>();
 	PhysicsSystem->Init(PhysicsSettings->MaxBodies, PhysicsSettings->NumBodyMutexes, PhysicsSettings->MaxBodyPairs,
 		PhysicsSettings->MaxContactConstraints, *BroadPhaseLayerInterface, *ObjectVsBroadPhaseLayerFilter, *ObjectLayerPairFilter);
-	PhysicsSystem->SetBodyActivationListener(BodyActivationListener);
-	PhysicsSystem->SetContactListener(ContactListener);
+	PhysicsSystem->SetBodyActivationListener(BodyActivationListener.Get());
+	PhysicsSystem->SetContactListener(ContactListener.Get());
 }
-#endif // WITH_JOLT_PHYSICS
 
-#if WITH_JOLT_PHYSICS
 JPH::PhysicsSystem& UJPRPhysicsSubsystem::GetPhysicsSystem() const
 {
 	check(PhysicsSystem.IsValid());
