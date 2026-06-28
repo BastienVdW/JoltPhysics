@@ -49,4 +49,11 @@ public:
 	UPROPERTY(EditAnywhere, config, Category=JoltPhysics)
 	TSoftObjectPtr<class UJPRPhysicsLayerDataAsset> DefaultLayer;
 
+	/**
+	 * Whether the physics world should be ticked automatically by the subsystem.
+	 * If disabled, the physics world will not be ticked automatically and must be ticked manually by calling `TickPhysics` on the subsystem.
+	 */
+	UPROPERTY(EditAnywhere, config, Category=JoltPhysics)
+	bool bCreateJoltPhysicsSubsystem = false;
+
 };

@@ -75,15 +75,41 @@ void UJPRPhysicsSubsystem::Deinitialize()
 	DeletePhysicsSystem();
 }
 
+bool UJPRPhysicsSubsystem::ShouldCreateSubsystem(UObject* Outer) const
+{
+	const UJPRPhysicsSettings* PhysicsSettings = GetDefault<UJPRPhysicsSettings>();
+	if (PhysicsSettings->bCreateJoltPhysicsSubsystem)
+	{
+		return Super::ShouldCreateSubsystem(Outer);
+	}
+	return false;
+}
+
+void UJPRPhysicsSubsystem::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+	
+	const UJPRPhysicsSettings* PhysicsSettings = GetDefault<UJPRPhysicsSettings>();
+	StepPhysics(DeltaTime, PhysicsSettings->CollisionSteps, 1.f);
+}
+
+TStatId UJPRPhysicsSubsystem::GetStatId() const
+{
+	RETURN_QUICK_DECLARE_CYCLE_STAT(UJPRPhysicsSubsystem, STATGROUP_Tickables);
+}
+
 void UJPRPhysicsSubsystem::StepPhysics(const float DeltaTime, const int32 CollisionSteps, const float TimeDilation)
 {
+	if (HasPhysicsSystem())
+	{
 #if WITH_JOLT_PHYSICS
-	check(PhysicsSystem.IsValid());
-	check(TempAllocator.IsValid());
-	check(JobSystem.IsValid());
-	PhysicsSystem->Update(DeltaTime * TimeDilation, CollisionSteps, TempAllocator.Get(), JobSystem.Get());
-	JobSystem->WaitThreads();
+		check(PhysicsSystem.IsValid());
+		check(TempAllocator.IsValid());
+		check(JobSystem.IsValid());
+		PhysicsSystem->Update(DeltaTime * TimeDilation, CollisionSteps, TempAllocator.Get(), JobSystem.Get());
+		JobSystem->WaitThreads();
 #endif // WITH_JOLT_PHYSICS
+	}
 }
 
 bool UJPRPhysicsSubsystem::HasPhysicsSystem() const

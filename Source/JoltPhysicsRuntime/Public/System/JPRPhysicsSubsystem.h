@@ -52,7 +52,7 @@ struct JOLTPHYSICSRUNTIME_API FJPRContactEvent
  * Recall derives from this type so existing subsystem references remain stable throughout the migration.
  */
 UCLASS(Abstract)
-class JOLTPHYSICSRUNTIME_API UJPRPhysicsSubsystem : public UWorldSubsystem
+class JOLTPHYSICSRUNTIME_API UJPRPhysicsSubsystem : public UTickableWorldSubsystem
 {
 	GENERATED_BODY()
 
@@ -75,10 +75,17 @@ public:
 	TSharedPtr<JPH::TempAllocator> GetTempAllocator() const { return TempAllocator; }
 #endif // WITH_JOLT_PHYSICS
 	
-	// UWorldSubsystem implementation Begin
+	// USubsystem implementation Begin
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
-	// UWorldSubsystem implementation Begin
+	virtual bool ShouldCreateSubsystem(UObject* Outer) const override;
+	// USubsystem implementation End
+	
+	// FTickableGameObject implementation Begin
+	virtual void Tick(float DeltaTime) override;
+	virtual TStatId GetStatId() const override;
+	virtual bool IsTickable() const override { return true; }
+	// FTickableGameObject implementation End
 	
 protected:
 	void StepPhysics(float DeltaTime, int32 CollisionSteps, float TimeDilation = 1.0f);
