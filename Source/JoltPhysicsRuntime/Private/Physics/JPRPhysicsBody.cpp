@@ -384,6 +384,116 @@ float FJPRPhysicsBody::GetMass() const
 	return 0.0f;
 }
 
+void FJPRPhysicsBody::AddLinearVelocityPerSecond(const FVector& LinearVelocity)
+{
+#if WITH_JOLT_PHYSICS
+	if (body_id.IsValid())
+	{
+		const FVector PhysicsVelocity = UnrealToJoltPhysics(LinearVelocity);
+		GetBodyInterface().AddLinearVelocity(*body_id, JPH::Vec3(PhysicsVelocity.X, PhysicsVelocity.Y, PhysicsVelocity.Z));
+	}
+#endif // WITH_JOLT_PHYSICS
+}
+
+void FJPRPhysicsBody::AddLinearAndAngularVelocityPerSecond(const FVector& LinearVelocity, const FVector& AngularVelocityDegrees)
+{
+#if WITH_JOLT_PHYSICS
+	if (body_id.IsValid())
+	{
+		const FVector PhysicsLinearVelocity = UnrealToJoltPhysics(LinearVelocity);
+		const FVector PhysicsAngularVelocity = FMath::DegreesToRadians(UnrealToJoltPhysics(AngularVelocityDegrees));
+		GetBodyInterface().AddLinearAndAngularVelocity(*body_id,
+			JPH::Vec3(PhysicsLinearVelocity.X, PhysicsLinearVelocity.Y, PhysicsLinearVelocity.Z),
+			JPH::Vec3(PhysicsAngularVelocity.X, PhysicsAngularVelocity.Y, PhysicsAngularVelocity.Z));
+	}
+#endif // WITH_JOLT_PHYSICS
+}
+
+void FJPRPhysicsBody::SetLinearAndAngularVelocityPerSecond(const FVector& LinearVelocity, const FVector& AngularVelocityDegrees)
+{
+#if WITH_JOLT_PHYSICS
+	if (body_id.IsValid())
+	{
+		const FVector PhysicsLinearVelocity = UnrealToJoltPhysics(LinearVelocity);
+		const FVector PhysicsAngularVelocity = FMath::DegreesToRadians(UnrealToJoltPhysics(AngularVelocityDegrees));
+		GetBodyInterface().SetLinearAndAngularVelocity(*body_id,
+			JPH::Vec3(PhysicsLinearVelocity.X, PhysicsLinearVelocity.Y, PhysicsLinearVelocity.Z),
+			JPH::Vec3(PhysicsAngularVelocity.X, PhysicsAngularVelocity.Y, PhysicsAngularVelocity.Z));
+	}
+#endif // WITH_JOLT_PHYSICS
+}
+
+void FJPRPhysicsBody::SetLinearVelocityPerSecond(const FVector& LinearVelocity)
+{
+#if WITH_JOLT_PHYSICS
+	if (body_id.IsValid())
+	{
+		const FVector PhysicsVelocity = UnrealToJoltPhysics(LinearVelocity);
+		GetBodyInterface().SetLinearVelocity(*body_id, JPH::Vec3(PhysicsVelocity.X, PhysicsVelocity.Y, PhysicsVelocity.Z));
+	}
+#endif // WITH_JOLT_PHYSICS
+}
+
+FVector FJPRPhysicsBody::GetLinearVelocityPerSecond() const
+{
+#if WITH_JOLT_PHYSICS
+	if (body_id.IsValid())
+	{
+		const JPH::Vec3 PhysicsVelocity = GetBodyInterface().GetLinearVelocity(*body_id);
+		return JoltPhysicsToUnreal(FVector(PhysicsVelocity.GetX(), PhysicsVelocity.GetY(), PhysicsVelocity.GetZ()));
+	}
+#endif // WITH_JOLT_PHYSICS
+	return FVector::ZeroVector;
+}
+
+void FJPRPhysicsBody::SetAngularVelocityPerSecond(const FVector& AngularVelocityDegrees)
+{
+#if WITH_JOLT_PHYSICS
+	if (body_id.IsValid())
+	{
+		const FVector PhysicsVelocity = FMath::DegreesToRadians(UnrealToJoltPhysics(AngularVelocityDegrees));
+		GetBodyInterface().SetAngularVelocity(*body_id, JPH::Vec3(PhysicsVelocity.X, PhysicsVelocity.Y, PhysicsVelocity.Z));
+	}
+#endif // WITH_JOLT_PHYSICS
+}
+
+FVector FJPRPhysicsBody::GetAngularVelocityPerSecond() const
+{
+#if WITH_JOLT_PHYSICS
+	if (body_id.IsValid())
+	{
+		const JPH::Vec3 PhysicsVelocity = GetBodyInterface().GetAngularVelocity(*body_id);
+		return FMath::RadiansToDegrees(JoltPhysicsToUnreal(
+			FVector(PhysicsVelocity.GetX(), PhysicsVelocity.GetY(), PhysicsVelocity.GetZ())));
+	}
+#endif // WITH_JOLT_PHYSICS
+	return FVector::ZeroVector;
+}
+
+#if UE_BUILD_DEBUG || UE_BUILD_DEVELOPMENT
+void FJPRPhysicsBody::DumpObject() const
+{
+#if WITH_JOLT_PHYSICS
+	if (body_id.IsValid())
+	{
+		JPH::RVec3 PhysicsPosition = JPH::RVec3::sZero();
+		JPH::Quat PhysicsRotation = JPH::Quat::sIdentity();
+		GetBodyInterface().GetPositionAndRotation(*body_id, PhysicsPosition, PhysicsRotation);
+
+		const FVector WorldPosition = JoltPhysicsToUnreal(
+			FVector(PhysicsPosition.GetX(), PhysicsPosition.GetY(), PhysicsPosition.GetZ()));
+		const JPH::Vec3 PhysicsVelocity = GetBodyInterface().GetLinearVelocity(*body_id);
+		const FVector WorldVelocity = JoltPhysicsToUnreal(
+			FVector(PhysicsVelocity.GetX(), PhysicsVelocity.GetY(), PhysicsVelocity.GetZ()));
+
+		UE_LOG(LogTemp, Log, TEXT("[BodyID: %d]\nPhysicsVelocity: X=%3.3f Y=%3.3f Z=%3.3f\nWorldVelocity: %s\nPhysicsPosition: X=%3.3f Y=%3.3f Z=%3.3f\nWorldPosition: %s"),
+			GetBodyID(), PhysicsVelocity.GetX(), PhysicsVelocity.GetY(), PhysicsVelocity.GetZ(), *WorldVelocity.ToString(),
+			PhysicsPosition.GetX(), PhysicsPosition.GetY(), PhysicsPosition.GetZ(), *WorldPosition.ToString());
+	}
+#endif // WITH_JOLT_PHYSICS
+}
+#endif // UE_BUILD_DEBUG || UE_BUILD_DEVELOPMENT
+
 FVector FJPRPhysicsBody::GetForwardVector() const
 {
 	FQuat Rotation = FQuat::Identity;
@@ -417,6 +527,26 @@ JPH::Body* FJPRPhysicsBody::CreateAndSetBody(const JPH::BodyCreationSettings& Bo
 	return Body;
 }
 
+void FJPRPhysicsBody::SetupBodyCreationSettings(JPH::BodyCreationSettings& BodyCreationSettings, const FJPRPhysicsBodyParameters& Params)
+{
+	BodyCreationSettings.mGravityFactor = Params.GravityFactor;
+	BodyCreationSettings.mMotionQuality = static_cast<JPH::EMotionQuality>(Params.MotionQuality);
+	BodyCreationSettings.mEnhancedInternalEdgeRemoval = Params.EnhancedInternalEdgeRemoval;
+	BodyCreationSettings.mFriction = Params.Friction;
+	BodyCreationSettings.mAllowDynamicOrKinematic = Params.bAllowDynamicOrKinematic;
+	BodyCreationSettings.mIsSensor = Params.bIsSensor;
+	BodyCreationSettings.mRestitution = Params.Restitution;
+	BodyCreationSettings.mMaxAngularVelocity = FMath::DegreesToRadians(Params.MaxAngularVelocityDegrees);
+	BodyCreationSettings.mAllowSleeping = Params.bAllowSleeping;
+	BodyCreationSettings.mAllowedDOFs = static_cast<JPH::EAllowedDOFs>(Params.AllowedDOFs);
+	BodyCreationSettings.mOverrideMassProperties = static_cast<JPH::EOverrideMassProperties>(Params.OverrideMassProperties);
+	BodyCreationSettings.mInertiaMultiplier = Params.InertiaMultiplier;
+	BodyCreationSettings.mMassPropertiesOverride.mMass = Params.MassPropertiesOverride.Mass;
+	BodyCreationSettings.mMassPropertiesOverride.mInertia = JPH::Mat44::sScale(Params.MassPropertiesOverride.Inertia);
+	BodyCreationSettings.mNumVelocityStepsOverride = Params.NumVelocityStepsOverride;
+	BodyCreationSettings.mNumPositionStepsOverride = Params.NumPositionStepsOverride;
+}
+
 void FJPRPhysicsBody::SetBodyID(const JPH::BodyID& InBodyID)
 {
 	body_id = MakeShared<JPH::BodyID>(InBodyID);
@@ -439,4 +569,17 @@ JPH::TempAllocator& FJPRPhysicsBody::GetTempAllocator() const
 	check(TempAllocatorWeak.IsValid());
 	return *TempAllocatorWeak.Pin();
 }
+
+void FJPRPhysicsBody::SaveVector(JPH::StateRecorder& State, const FVector& Vec)
+{
+	State.Write(JPH::DVec3(Vec.X, Vec.Y, Vec.Z));
+}
+
+void FJPRPhysicsBody::RestoreVector(JPH::StateRecorder& State, FVector& Vec)
+{
+	JPH::DVec3 Src = JPH::DVec3::sZero();
+	State.Read(Src);
+	Vec = FVector(Src.GetX(), Src.GetY(), Src.GetZ());
+}
+
 #endif // WITH_JOLT_PHYSICS

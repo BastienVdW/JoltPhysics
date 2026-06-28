@@ -25,7 +25,7 @@ namespace JPH
 	class StateRecorderFilter;
 	class TempAllocator;
 }
-#endif
+#endif // WITH_JOLT_PHYSICS
 
 class UJPRPhysicsLayerDataAsset;
 
@@ -46,7 +46,7 @@ public:
 	JPH::BodyInterface& GetBodyInterface() const;
 	TSharedPtr<JPH::PhysicsSystem> GetPhysicsSystemPtr() const { return PhysicsSystem; }
 	TSharedPtr<JPH::TempAllocator> GetTempAllocator() const { return TempAllocator; }
-#endif
+#endif // WITH_JOLT_PHYSICS
 
 protected:
 	void StepPhysics(float DeltaTime, int32 CollisionSteps, float TimeDilation = 1.0f);
@@ -54,7 +54,7 @@ protected:
 #if WITH_JOLT_PHYSICS
 	void CreatePhysicsSystem(const UJPRPhysicsLayerDataAsset& PhysicsLayer, JPH::BodyActivationListener* BodyActivationListener,
 		JPH::ContactListener* ContactListener, const TSharedPtr<JPH::StateRecorderFilter>& InStateRecorderFilter);
-#endif
+#endif // WITH_JOLT_PHYSICS
 	void DeletePhysicsSystem();
 
 #if WITH_JOLT_PHYSICS
@@ -65,5 +65,5 @@ protected:
 	TSharedPtr<JPH::ObjectVsBroadPhaseLayerFilter> ObjectVsBroadPhaseLayerFilter;
 	TSharedPtr<JPH::ObjectLayerPairFilter> ObjectLayerPairFilter;
 	TSharedPtr<JPH::StateRecorderFilter> StateRecorderFilter;
-#endif
+#endif // WITH_JOLT_PHYSICS
 };

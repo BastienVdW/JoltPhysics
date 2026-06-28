@@ -7,6 +7,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Physics/JPRPhysicsTypes.h"
 
 #ifndef WITH_JOLT_PHYSICS
 #define WITH_JOLT_PHYSICS 0
@@ -21,6 +22,7 @@ namespace JPH
 	class BodyInterface;
 	class PhysicsSystem;
 	class TempAllocator;
+	class StateRecorder;
 }
 #endif // WITH_JOLT_PHYSICS
 
@@ -57,6 +59,14 @@ public:
 	void GetRotation(FQuat& OutRotation) const;
 	FVector GetForwardVector() const;
 	FVector GetRightVector() const;
+	
+	void AddLinearVelocityPerSecond(const FVector& LinearVelocity);
+	void AddLinearAndAngularVelocityPerSecond(const FVector& LinearVelocity, const FVector& AngularVelocityDegrees);
+	void SetLinearAndAngularVelocityPerSecond(const FVector& LinearVelocity, const FVector& AngularVelocityDegrees);
+	void SetLinearVelocityPerSecond(const FVector& LinearVelocity);
+	FVector GetLinearVelocityPerSecond() const;
+	void SetAngularVelocityPerSecond(const FVector& AngularVelocityDegrees);
+	FVector GetAngularVelocityPerSecond() const;
 
 	bool CollideShape(const FVector& Position, uint32& OutContactBodyID, FVector& OutContactPosition, FVector& OutContactNormal) const;
 	bool ShapeCast(const FVector& Position, const FVector& Direction, float Distance,
@@ -66,17 +76,51 @@ public:
 	void SetWorldContextObject(UObject* Object);
 	UObject* GetWorldContextObject() const;
 
+	/**
+	 * Draws a debug visualization of this body's shape in the world.
+	 * @param World The world context for debug drawing
+	 * @param Color Color to draw in
+	 * @note Only available in non-shipping builds.
+	 */
+	virtual void DrawDebugShape(const UWorld* World, const FColor& Color) const {}
+
+	/**
+	 * Draws debug information about this body (velocities, forces, etc).
+	 * @param World The world context for debug drawing
+	 * @param Color Color to draw in
+	 * @note Only available in non-shipping builds.
+	 */
+	virtual void DrawDebugInfo(const UWorld* World, const FColor& Color) const {}
+
+#if UE_BUILD_DEBUG || UE_BUILD_DEVELOPMENT
+	virtual void DumpObject() const;
+#endif // UE_BUILD_DEBUG || UE_BUILD_DEVELOPMENT
+
 #if WITH_JOLT_PHYSICS
 	void SetPhysicsSystem(const TWeakPtr<JPH::PhysicsSystem>& System) { PhysicsSystemWeak = System; }
 	void SetTempAllocator(const TWeakPtr<JPH::TempAllocator>& InTempAllocator) { TempAllocatorWeak = InTempAllocator; }
-#endif // WITH_JOLT_PHYSICS
 
+	virtual void SaveState(JPH::StateRecorder& State) {}
+	virtual void RestoreState(JPH::StateRecorder& State) {}
+	
+	/**
+	 * Helper method to save a FVector to the state recorder.
+	 */
+	static void SaveVector(JPH::StateRecorder& State, const FVector& Vec);
+	
+	/**
+	 * Helper method to restore a FVector from the state recorder.
+	 */
+	static void RestoreVector(JPH::StateRecorder& State, FVector& Vec);
+#endif // WITH_JOLT_PHYSICS
+	
 protected:
 	bool bEnabled = false;
 	bool bTriggerHitEvents = true;
 
 #if WITH_JOLT_PHYSICS
 	JPH::Body* CreateAndSetBody(const JPH::BodyCreationSettings& BodySettings, uint32 InBodyID);
+	static void SetupBodyCreationSettings(JPH::BodyCreationSettings& BodyCreationSettings, const FJPRPhysicsBodyParameters& Params);
 	void SetBodyID(const JPH::BodyID& InBodyID);
 
 	JPH::BodyInterface& GetBodyInterface() const;

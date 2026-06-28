@@ -16,7 +16,7 @@
 #include <Jolt/Physics/Body/BodyActivationListener.h>
 #include <Jolt/Physics/Collision/ContactListener.h>
 #include <Jolt/Physics/PhysicsSystem.h>
-#endif
+#endif // WITH_JOLT_PHYSICS
 
 void UJPRPhysicsSubsystem::StepPhysics(const float DeltaTime, const int32 CollisionSteps, const float TimeDilation)
 {
@@ -26,7 +26,7 @@ void UJPRPhysicsSubsystem::StepPhysics(const float DeltaTime, const int32 Collis
 	check(JobSystem.IsValid());
 	PhysicsSystem->Update(DeltaTime * TimeDilation, CollisionSteps, TempAllocator.Get(), JobSystem.Get());
 	JobSystem->WaitThreads();
-#endif
+#endif // WITH_JOLT_PHYSICS
 }
 
 void UJPRPhysicsSubsystem::DeletePhysicsSystem()
@@ -46,7 +46,7 @@ void UJPRPhysicsSubsystem::DeletePhysicsSystem()
 		delete JPH::Factory::sInstance;
 		JPH::Factory::sInstance = nullptr;
 	}
-#endif
+#endif // WITH_JOLT_PHYSICS
 }
 
 #if WITH_JOLT_PHYSICS
@@ -74,7 +74,7 @@ void UJPRPhysicsSubsystem::CreatePhysicsSystem(const UJPRPhysicsLayerDataAsset& 
 	PhysicsSystem->SetBodyActivationListener(BodyActivationListener);
 	PhysicsSystem->SetContactListener(ContactListener);
 }
-#endif
+#endif // WITH_JOLT_PHYSICS
 
 #if WITH_JOLT_PHYSICS
 JPH::PhysicsSystem& UJPRPhysicsSubsystem::GetPhysicsSystem() const
@@ -87,4 +87,4 @@ JPH::BodyInterface& UJPRPhysicsSubsystem::GetBodyInterface() const
 {
 	return GetPhysicsSystem().GetBodyInterface();
 }
-#endif
+#endif // WITH_JOLT_PHYSICS
