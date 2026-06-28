@@ -6,8 +6,8 @@
 
 #pragma once
 
-#include "CoreMinimal.h"
 #include "Subsystems/WorldSubsystem.h"
+#include "Physics/JPRPhysicsTypes.h"
 
 #include "JPRPhysicsSubsystem.generated.h"
 
@@ -41,13 +41,19 @@ class JOLTPHYSICSRUNTIME_API UJPRPhysicsSubsystem : public UWorldSubsystem
 	GENERATED_BODY()
 
 public:
+	void SetBodyObjectLayer(uint32 BodyID, uint16 Layer);
+	EJPRPhysicsMotionType GetBodyMotionType(uint32 BodyID) const;
+	void SetBodyMotionType(uint32 BodyID, EJPRPhysicsMotionType MotionType, EJPRPhysicsActivation ActivationMode);
+	bool CreateFixedConstraint(uint32 BodyID1, uint32 BodyID2, bool bActivate);
+	void RemoveFixedConstraints(uint32 BodyID1, uint32 BodyID2);
+
 #if WITH_JOLT_PHYSICS
 	JPH::PhysicsSystem& GetPhysicsSystem() const;
 	JPH::BodyInterface& GetBodyInterface() const;
 	TSharedPtr<JPH::PhysicsSystem> GetPhysicsSystemPtr() const { return PhysicsSystem; }
 	TSharedPtr<JPH::TempAllocator> GetTempAllocator() const { return TempAllocator; }
 #endif // WITH_JOLT_PHYSICS
-
+	
 protected:
 	void StepPhysics(float DeltaTime, int32 CollisionSteps, float TimeDilation = 1.0f);
 
@@ -66,4 +72,8 @@ protected:
 	TSharedPtr<JPH::ObjectLayerPairFilter> ObjectLayerPairFilter;
 	TSharedPtr<JPH::StateRecorderFilter> StateRecorderFilter;
 #endif // WITH_JOLT_PHYSICS
+	
+private:
+	// void RunSample();
+
 };
