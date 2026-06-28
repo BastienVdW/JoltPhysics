@@ -25,9 +25,7 @@ namespace JPH
 }
 #endif // WITH_JOLT_PHYSICS
 
-class UJPRPhysicsLayerDataAsset;
-class FJPRBodyActivationListener;
-class FJPRContactListener;
+class FJPRPhysicsBody;
 
 struct JOLTPHYSICSRUNTIME_API FJPRContactEvent
 {
@@ -60,11 +58,16 @@ class JOLTPHYSICSRUNTIME_API UJPRPhysicsSubsystem : public UWorldSubsystem
 
 public:
 	void SetBodyObjectLayer(uint32 BodyID, uint16 Layer);
+	
 	EJPRPhysicsMotionType GetBodyMotionType(uint32 BodyID) const;
 	void SetBodyMotionType(uint32 BodyID, EJPRPhysicsMotionType MotionType, EJPRPhysicsActivation ActivationMode);
+	
 	bool CreateFixedConstraint(uint32 BodyID1, uint32 BodyID2, bool bActivate);
 	void RemoveFixedConstraints(uint32 BodyID1, uint32 BodyID2);
 
+	TArray<FJPRContactEvent> ConsumeContactEvents();
+	int32 GetNumPendingContactEvents() const;
+	
 #if WITH_JOLT_PHYSICS
 	JPH::PhysicsSystem& GetPhysicsSystem() const;
 	JPH::BodyInterface& GetBodyInterface() const;
@@ -72,16 +75,26 @@ public:
 	TSharedPtr<JPH::TempAllocator> GetTempAllocator() const { return TempAllocator; }
 #endif // WITH_JOLT_PHYSICS
 	
+	// UWorldSubsystem implementation Begin
+	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
+	virtual void Deinitialize() override;
+	// UWorldSubsystem implementation Begin
+	
 protected:
 	void StepPhysics(float DeltaTime, int32 CollisionSteps, float TimeDilation = 1.0f);
-	TArray<FJPRContactEvent> ConsumeContactEvents();
-	int32 GetNumPendingContactEvents() const;
+	bool HasPhysicsSystem() const;
+	
+	TArray<uint8> SavePhysicsState(const TArray<TSharedPtr<FJPRPhysicsBody>>& Bodies) const;
+	bool RestorePhysicsState(const TArray<uint8>& StateData, const TArray<TSharedPtr<FJPRPhysicsBody>>& Bodies) const;
 
-#if WITH_JOLT_PHYSICS
-	void CreatePhysicsSystem(const UJPRPhysicsLayerDataAsset& PhysicsLayer, TFunction<bool(uint32)> ShouldSaveBody);
-#endif // WITH_JOLT_PHYSICS
+	void CreatePhysicsSystem();
 	void DeletePhysicsSystem();
+	
+	virtual bool ShouldRestorePhysicsBody(const uint32 BodyID) const { return true; }
 
+	UPROPERTY(Transient)
+	TObjectPtr<const class UJPRPhysicsLayerDataAsset> PhysicsLayer;
+	
 #if WITH_JOLT_PHYSICS
 	TSharedPtr<JPH::TempAllocator> TempAllocator;
 	TSharedPtr<JPH::JobSystemThreadPool> JobSystem;
@@ -90,11 +103,10 @@ protected:
 	TSharedPtr<JPH::ObjectVsBroadPhaseLayerFilter> ObjectVsBroadPhaseLayerFilter;
 	TSharedPtr<JPH::ObjectLayerPairFilter> ObjectLayerPairFilter;
 	TSharedPtr<JPH::StateRecorderFilter> StateRecorderFilter;
-	TSharedPtr<FJPRBodyActivationListener> BodyActivationListener;
-	TSharedPtr<FJPRContactListener> ContactListener;
+	TSharedPtr<class FJPRBodyActivationListener> BodyActivationListener;
+	TSharedPtr<class FJPRContactListener> ContactListener;
 #endif // WITH_JOLT_PHYSICS
 	
-private:
 	// void RunSample();
 
 };

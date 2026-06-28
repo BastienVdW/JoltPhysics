@@ -6,8 +6,8 @@
 
 #pragma once
 
-#include "CoreMinimal.h"
 #include "Engine/DeveloperSettingsBackedByCVars.h"
+#include "UObject/SoftObjectPtr.h"
 
 #include "JPRPhysicsSettings.generated.h"
 
@@ -15,7 +15,7 @@
 UCLASS(config=Game, defaultconfig, meta=(DisplayName="Jolt Physics"))
 class JOLTPHYSICSRUNTIMECORE_API UJPRPhysicsSettings : public UDeveloperSettingsBackedByCVars
 {
-	GENERATED_BODY()
+	GENERATED_UCLASS_BODY()
 
 public:
 	/// Maximum number of worker threads available to the physics job system.
@@ -41,4 +41,12 @@ public:
 	/// Maximum number of contact constraints retained by the physics world.
 	UPROPERTY(EditAnywhere, config, Category=JoltPhysics)
 	uint32 MaxContactConstraints = 10240;
+	
+	/**
+	 * Default asset to be used for the physics layer of this project.
+	 * It is possible to override the physics layer asset from the world settings directly.
+	 */
+	UPROPERTY(EditAnywhere, config, Category=JoltPhysics)
+	TSoftObjectPtr<class UJPRPhysicsLayerDataAsset> DefaultLayer;
+
 };
