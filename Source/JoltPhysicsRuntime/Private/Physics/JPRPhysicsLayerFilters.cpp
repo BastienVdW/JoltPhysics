@@ -28,7 +28,9 @@ namespace
 		virtual const char* GetBroadPhaseLayerName(JPH::BroadPhaseLayer InLayer) const override
 		{
 			LayerName = PhysicsLayer->GetBroadPhaseLayerName(static_cast<int32>(InLayer.GetValue())).ToString();
-			return TCHAR_TO_ANSI(*LayerName);
+			const auto Converted = StringCast<ANSICHAR>(*LayerName);
+			LayerNameAnsi = TArray<ANSICHAR>(Converted.Get(), Converted.Length() + 1);
+			return LayerNameAnsi.GetData();
 		}
 #endif
 
@@ -36,6 +38,7 @@ namespace
 		TWeakObjectPtr<const UJPRPhysicsLayerDataAsset> PhysicsLayer;
 #if defined(JPH_EXTERNAL_PROFILE) || defined(JPH_PROFILE_ENABLED)
 		mutable FString LayerName;
+		mutable TArray<ANSICHAR> LayerNameAnsi;
 #endif
 	};
 

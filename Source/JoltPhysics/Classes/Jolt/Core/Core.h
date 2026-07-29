@@ -94,6 +94,10 @@
 	#endif
 #elif defined(__EMSCRIPTEN__)
 	#define JPH_PLATFORM_WASM
+//@ BASTIEN ADD
+#elif defined(JPH_PLATFORM_OUNCE)
+	// Correct define already defined by JoltPhysics.Build.cs, nothing more to detect
+//@ BASTIEN END
 #endif
 
 // Platform helper macros
@@ -455,6 +459,10 @@
 	#endif
 #elif defined(JPH_PLATFORM_WASM)
 	#define JPH_BREAKPOINT		do { } while (false) // Not supported
+//@ BASTIEN ADD
+#elif defined(JPH_PLATFORM_OUNCE)
+	#include <Jolt/Core/PlatformOunce.h>
+//@ BASTIEN END
 #else
 	#error Unknown platform
 #endif
