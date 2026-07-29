@@ -4,13 +4,14 @@
 
 #pragma once
 
-//@ BASTIEN ADD
-#include <Jolt/Physics/Body/MotionQuality.h>
-//@ BASTIEN END
 #include <Jolt/Physics/Character/CharacterBase.h>
 #include <Jolt/Physics/Collision/ObjectLayer.h>
 #include <Jolt/Physics/Collision/TransformedShape.h>
 #include <Jolt/Physics/EActivation.h>
+#include <Jolt/Physics/Body/AllowedDOFs.h>
+//@ BASTIEN ADD
+#include <Jolt/Physics/Body/MotionQuality.h>
+//@ BASTIEN END
 
 JPH_NAMESPACE_BEGIN
 
@@ -19,6 +20,11 @@ class JPH_EXPORT CharacterSettings : public CharacterBaseSettings
 {
 public:
 	JPH_OVERRIDE_NEW_DELETE
+
+	/// Constructor
+										CharacterSettings() = default;
+										CharacterSettings(const CharacterSettings &) = default;
+	CharacterSettings &					operator = (const CharacterSettings &) = default;
 
 	/// Layer that this character will be added to
 	ObjectLayer							mLayer = 0;
@@ -31,6 +37,9 @@ public:
 
 	/// Value to multiply gravity with for this character
 	float								mGravityFactor = 1.0f;
+
+	/// Allowed degrees of freedom for this character
+	EAllowedDOFs						mAllowedDOFs = EAllowedDOFs::TranslationX | EAllowedDOFs::TranslationY | EAllowedDOFs::TranslationZ;
 
 	//@ BASTIEN ADD
 	/// Motion quality, or how well it detects collisions when it has a high velocity
@@ -56,7 +65,10 @@ public:
 	/// @param inRotation Initial rotation for the character (usually only around Y)
 	/// @param inUserData Application specific value
 	/// @param inSystem Physics system that this character will be added to later
-										Character(const CharacterSettings *inSettings, RVec3Arg inPosition, QuatArg inRotation, uint64 inUserData, PhysicsSystem *inSystem, BodyID* inBodyID);
+	//@ BASTIEN ADD
+	// Character(const CharacterSettings *inSettings, RVec3Arg inPosition, QuatArg inRotation, uint64 inUserData, PhysicsSystem *inSystem);
+										Character(const CharacterSettings *inSettings, RVec3Arg inPosition, QuatArg inRotation, uint64 inUserData, PhysicsSystem *inSystem, BodyID* inBodyID = nullptr);
+	//@ BASTIEN END
 
 	/// Destructor
 	virtual								~Character() override;
@@ -103,7 +115,7 @@ public:
 	RVec3								GetPosition(bool inLockBodies = true) const;
 
 	/// Set the position of the character, optionally activating it.
-	void								SetPosition(RVec3Arg inPostion, EActivation inActivationMode = EActivation::Activate, bool inLockBodies = true);
+	void								SetPosition(RVec3Arg inPosition, EActivation inActivationMode = EActivation::Activate, bool inLockBodies = true);
 
 	/// Get the rotation of the character
 	Quat								GetRotation(bool inLockBodies = true) const;
@@ -140,6 +152,9 @@ public:
 	/// @param ioCollector Collision collector that receives the collision results.
 	/// @param inLockBodies If the collision query should use the locking body interface (true) or the non locking body interface (false)
 	void								CheckCollision(RVec3Arg inPosition, QuatArg inRotation, Vec3Arg inMovementDirection, float inMaxSeparationDistance, const Shape *inShape, RVec3Arg inBaseOffset, CollideShapeCollector &ioCollector, bool inLockBodies = true) const;
+
+	/// Get the character settings that can recreate this character
+	CharacterSettings					GetCharacterSettings(bool inLockBodies = true) const;
 
 private:
 	/// Check collisions between inShape and the world using the center of mass transform

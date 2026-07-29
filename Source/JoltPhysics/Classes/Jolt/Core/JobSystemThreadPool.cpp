@@ -1,3 +1,4 @@
+// Jolt Physics Library (https://github.com/jrouwe/JoltPhysics)
 // SPDX-FileCopyrightText: 2021 Jorrit Rouwe
 // SPDX-License-Identifier: MIT
 
@@ -6,246 +7,17 @@
 #include <Jolt/Core/JobSystemThreadPool.h>
 #include <Jolt/Core/Profiler.h>
 #include <Jolt/Core/FPException.h>
+#include <Jolt/Core/IncludeWindows.h>
 
-#ifdef JPH_PLATFORM_WINDOWS
-	JPH_SUPPRESS_WARNING_PUSH
-	JPH_MSVC_SUPPRESS_WARNING(5039) // winbase.h(13179): warning C5039: 'TpSetCallbackCleanupGroup': pointer or reference to potentially throwing function passed to 'extern "C"' function under -EHc. Undefined behavior may occur if this function throws an exception.
-	#define WIN32_LEAN_AND_MEAN
-#ifndef JPH_COMPILER_MINGW
-	#include <Windows.h>
-#else
-	#include <windows.h>
-#endif
-
-	JPH_SUPPRESS_WARNING_POP
+#ifdef JPH_PLATFORM_LINUX
+	#include <sys/prctl.h>
 #endif
 
 JPH_NAMESPACE_BEGIN
 
-JobSystemThreadPool::Semaphore::Semaphore()
-{
-}
-
-JobSystemThreadPool::Semaphore::~Semaphore()
-{
-}
-
-void JobSystemThreadPool::Semaphore::Release(uint inNumber)
-{
-	JPH_ASSERT(inNumber > 0);
-
-	mCount += inNumber;
-}
-
-void JobSystemThreadPool::Semaphore::Acquire(uint inNumber)
-{
-	JPH_ASSERT(inNumber > 0);
-
-	mCount -= inNumber;
-	FGenericPlatformProcess::ConditionalSleep([this]() { return mCount >= 0; });
-}
-
-JobSystemThreadPool::BarrierImpl::BarrierImpl()
-{
-	for (atomic<Job *> &j : mJobs)
-		j = nullptr;
-}
-
-JobSystemThreadPool::BarrierImpl::~BarrierImpl()
-{
-	JPH_ASSERT(IsEmpty());
-}
-
-void JobSystemThreadPool::BarrierImpl::AddJob(const JobHandle &inJob)
-{
-	JPH_PROFILE_FUNCTION();
-
-	bool release_semaphore = false;
-
-	// Set the barrier on the job, this returns true if the barrier was successfully set (otherwise the job is already done and we don't need to add it to our list)
-	Job *job = inJob.GetPtr();
-	if (job->SetBarrier(this))
-	{
-		// If the job can be executed we want to release the semaphore an extra time to allow the waiting thread to start executing it
-		mNumToAcquire++;
-		if (job->CanBeExecuted())
-		{
-			release_semaphore = true;
-			mNumToAcquire++;
-		}
-
-		// Add the job to our job list
-		job->AddRef();
-		uint write_index = mJobWriteIndex++;
-		while (write_index - mJobReadIndex >= cMaxJobs)
-		{
-			JPH_ASSERT(false, "Barrier full, stalling!");
-			std::this_thread::sleep_for(std::chrono::microseconds(100));
-		}
-		mJobs[write_index & (cMaxJobs - 1)] = job;
-	}
-
-	// Notify waiting thread that a new executable job is available
-	if (release_semaphore)
-		mSemaphore.Release();
-}
-
-void JobSystemThreadPool::BarrierImpl::AddJobs(const JobHandle *inHandles, uint inNumHandles)
-{
-	JPH_PROFILE_FUNCTION();
-
-	bool release_semaphore = false;
-
-	for (const JobHandle *handle = inHandles, *handles_end = inHandles + inNumHandles; handle < handles_end; ++handle)
-	{
-		// Set the barrier on the job, this returns true if the barrier was successfully set (otherwise the job is already done and we don't need to add it to our list)
-		Job *job = handle->GetPtr();
-		if (job->SetBarrier(this))
-		{
-			// If the job can be executed we want to release the semaphore an extra time to allow the waiting thread to start executing it
-			mNumToAcquire++;
-			if (!release_semaphore && job->CanBeExecuted())
-			{
-				release_semaphore = true;
-				mNumToAcquire++;
-			}
-
-			// Add the job to our job list
-			job->AddRef();
-			uint write_index = mJobWriteIndex++;
-			while (write_index - mJobReadIndex >= cMaxJobs)
-			{
-				JPH_ASSERT(false, "Barrier full, stalling!");
-				std::this_thread::sleep_for(std::chrono::microseconds(100));
-			}
-			mJobs[write_index & (cMaxJobs - 1)] = job;
-		}
-	}
-
-	// Notify waiting thread that a new executable job is available
-	if (release_semaphore)
-		mSemaphore.Release();
-}
-
-void JobSystemThreadPool::BarrierImpl::OnJobFinished(Job *inJob)
-{
-	JPH_PROFILE_FUNCTION();
-
-	mSemaphore.Release();
-}
-
-void JobSystemThreadPool::BarrierImpl::Wait()
-{
-	while (mNumToAcquire > 0)
-	{
-		{
-			JPH_PROFILE("Execute Jobs");
-
-			// Go through all jobs
-			bool has_executed;
-			do
-			{
-				has_executed = false;
-
-				// Loop through the jobs and erase jobs from the beginning of the list that are done
-				while (mJobReadIndex < mJobWriteIndex)
-				{				
-					atomic<Job *> &job = mJobs[mJobReadIndex & (cMaxJobs - 1)];
-					Job *job_ptr = job.load();
-					if (job_ptr == nullptr || !job_ptr->IsDone())
-						break;
-
-					// Job is finished, release it
-					job_ptr->Release();
-					job = nullptr;
-					++mJobReadIndex;
-				}
-
-				// Loop through the jobs and execute the first executable job
-				for (uint index = mJobReadIndex; index < mJobWriteIndex; ++index)
-				{
-					const atomic<Job *> &job = mJobs[index & (cMaxJobs - 1)];
-					Job *job_ptr = job.load();
-					if (job_ptr != nullptr && job_ptr->CanBeExecuted())
-					{
-						// This will only execute the job if it has not already executed
-						job_ptr->Execute();
-						has_executed = true;
-						break;
-					}
-				}
-
-			} while (has_executed);
-		}
-
-		// Wait for another thread to wake us when either there is more work to do or when all jobs have completed
-		int num_to_acquire = max(1, mSemaphore.GetValue()); // When there have been multiple releases, we acquire them all at the same time to avoid needlessly spinning on executing jobs
-		mSemaphore.Acquire(num_to_acquire);
-		mNumToAcquire -= num_to_acquire;
-	}
-
-	// All jobs should be done now, release them
-	while (mJobReadIndex < mJobWriteIndex)
-	{				
-		atomic<Job *> &job = mJobs[mJobReadIndex & (cMaxJobs - 1)];
-		Job *job_ptr = job.load();
-		JPH_ASSERT(job_ptr != nullptr && job_ptr->IsDone());
-		job_ptr->Release();
-		job = nullptr;
-		++mJobReadIndex;
-	}
-}
-
-JobSystemThreadPool::FJobSystemThread::FJobSystemThread(JobSystemThreadPool* inThreadPool, int32 inThreadIndex)
-	: mThreadPool(inThreadPool)
-	, mThreadIndex(inThreadIndex)
-{
-	mThread = FRunnableThread::Create(this, *FString::Printf(TEXT("JoltPhysics <%d>"), inThreadIndex), 0, TPri_Highest);
-}
-
-JobSystemThreadPool::FJobSystemThread::~FJobSystemThread()
-{
-	delete mThread;
-	mThread = nullptr;
-}
-
-bool JobSystemThreadPool::FJobSystemThread::Init()
-{
-	return true;
-}
-
-uint32 JobSystemThreadPool::FJobSystemThread::Run()
-{
-	if (mThreadPool != nullptr)
-	{
-		mThreadPool->ThreadMain(mThreadIndex);
-	}
-
-	bShutdown = true;
-	return 0;
-}
-
-void JobSystemThreadPool::FJobSystemThread::Exit()
-{
-	mThreadPool = nullptr;
-	mThreadIndex = INDEX_NONE;
-}
-
-void JobSystemThreadPool::FJobSystemThread::Stop()
-{
-	while (!bShutdown)
-	{
-		std::this_thread::sleep_for(std::chrono::microseconds(100));
-	}
-}
-
 void JobSystemThreadPool::Init(uint inMaxJobs, uint inMaxBarriers, int inNumThreads)
 {
-	JPH_ASSERT(mBarriers == nullptr); // Already initialized?
-
-	// Init freelist of barriers
-	mMaxBarriers = inMaxBarriers;
-	mBarriers = new BarrierImpl [inMaxBarriers];
+	JobSystemWithBarrier::Init(inMaxBarriers);
 
 	// Init freelist of jobs
 	mJobs.Init(inMaxJobs, inMaxJobs);
@@ -263,10 +35,9 @@ JobSystemThreadPool::JobSystemThreadPool(uint inMaxJobs, uint inMaxBarriers, int
 	Init(inMaxJobs, inMaxBarriers, inNumThreads);
 }
 
-void JobSystemThreadPool::StartThreads(int inNumThreads)
+void JobSystemThreadPool::StartThreads([[maybe_unused]] int inNumThreads)
 {
-	TRACE_CPUPROFILER_EVENT_SCOPE_STR(*FString::Printf(TEXT("JobSystemThreadPool::StartThreads")));
-
+#if !defined(JPH_CPU_WASM) || defined(__EMSCRIPTEN_PTHREADS__) // If we're running without threads support we cannot create threads and we ignore the inNumThreads parameter
 	// Auto detect number of threads
 	if (inNumThreads < 0)
 		inNumThreads = thread::hardware_concurrency() - 1;
@@ -287,20 +58,14 @@ void JobSystemThreadPool::StartThreads(int inNumThreads)
 	JPH_ASSERT(mThreads.empty());
 	mThreads.reserve(inNumThreads);
 	for (int i = 0; i < inNumThreads; ++i)
-		mThreads.emplace_back(MakeUnique<FJobSystemThread>(this, i));
+		mThreads.emplace_back([this, i] { ThreadMain(i); });
+#endif
 }
 
 JobSystemThreadPool::~JobSystemThreadPool()
 {
 	// Stop all worker threads
 	StopThreads();
-
-	// Ensure that none of the barriers are used
-#ifdef JPH_ENABLE_ASSERTS
-	for (const BarrierImpl *b = mBarriers, *b_end = mBarriers + mMaxBarriers; b < b_end; ++b)
-		JPH_ASSERT(!b->mInUse);
-#endif // JPH_ENABLE_ASSERTS
-	delete [] mBarriers;
 }
 
 void JobSystemThreadPool::StopThreads()
@@ -312,37 +77,24 @@ void JobSystemThreadPool::StopThreads()
 	mQuit = true;
 	mSemaphore.Release((uint)mThreads.size());
 
-	{
-		TRACE_CPUPROFILER_EVENT_SCOPE_STR(*FString::Printf(TEXT("JobSystemThreadPool::StopThreads Join")));
-
-		// Wait for all threads to finish
-		for (FThreadPtr& t : mThreads)
-		{
-			if (t.IsValid())
-			{
-				t->Stop();
-				t.Reset();
-			}
-		}
-	}
+	// Wait for all threads to finish
+	for (thread &t : mThreads)
+		if (t.joinable())
+			t.join();
 
 	// Delete all threads
 	mThreads.clear();
 
+	// Ensure that there are no lingering jobs in the queue
+	for (uint head = 0; head != mTail; ++head)
 	{
-		TRACE_CPUPROFILER_EVENT_SCOPE_STR(*FString::Printf(TEXT("JobSystemThreadPool::StopThreads Execute/Release")));
-
-		// Ensure that there are no lingering jobs in the queue
-		for (uint head = 0; head != mTail; ++head)
+		// Fetch job
+		Job *job_ptr = mQueue[head & (cQueueLength - 1)].exchange(nullptr);
+		if (job_ptr != nullptr)
 		{
-			// Fetch job
-			Job* job_ptr = mQueue[head & (cQueueLength - 1)].exchange(nullptr);
-			if (job_ptr != nullptr)
-			{
-				// And execute it
-				job_ptr->Execute();
-				job_ptr->Release();
-			}
+			// And execute it
+			job_ptr->Execute();
+			job_ptr->Release();
 		}
 	}
 
@@ -352,9 +104,10 @@ void JobSystemThreadPool::StopThreads()
 	mTail = 0;
 }
 
+//@ BASTIEN ADD
 void JobSystemThreadPool::WaitThreads()
 {
-	TRACE_CPUPROFILER_EVENT_SCOPE_STR(*FString::Printf(TEXT("JobSystemThreadPool::WaitThreads")));
+	JPH_PROFILE_FUNCTION();
 
 	bool bWaiting = false;
 
@@ -370,8 +123,6 @@ void JobSystemThreadPool::WaitThreads()
 				Job* job_ptr = job.exchange(nullptr);
 				if (job_ptr != nullptr)
 				{
-					TRACE_CPUPROFILER_EVENT_SCOPE_STR(*FString::Printf(TEXT("JobSystemThreadPool::WaitThreads Execute")));
-
 					// And execute it
 					job_ptr->Execute();
 					job_ptr->Release();
@@ -385,6 +136,7 @@ void JobSystemThreadPool::WaitThreads()
 		}
 	} while (bWaiting);
 }
+//@ BASTIEN END
 
 JobHandle JobSystemThreadPool::CreateJob(const char *inJobName, ColorArg inColor, const JobFunction &inJobFunction, uint32 inNumDependencies)
 {
@@ -401,10 +153,10 @@ JobHandle JobSystemThreadPool::CreateJob(const char *inJobName, ColorArg inColor
 		std::this_thread::sleep_for(std::chrono::microseconds(100));
 	}
 	Job *job = &mJobs.Get(index);
-	
+
 	// Construct handle to keep a reference, the job is queued below and may immediately complete
 	JobHandle handle(job);
-	
+
 	// If there are no dependencies, queue the job now
 	if (inNumDependencies == 0)
 		QueueJob(job);
@@ -416,42 +168,6 @@ JobHandle JobSystemThreadPool::CreateJob(const char *inJobName, ColorArg inColor
 void JobSystemThreadPool::FreeJob(Job *inJob)
 {
 	mJobs.DestructObject(inJob);
-}
-
-JobSystem::Barrier *JobSystemThreadPool::CreateBarrier()
-{
-	JPH_PROFILE_FUNCTION();
-
-	// Find the first unused barrier
-	for (uint32 index = 0; index < mMaxBarriers; ++index)
-	{
-		bool expected = false;
-		if (mBarriers[index].mInUse.compare_exchange_strong(expected, true))
-			return &mBarriers[index];
-	}
-
-	return nullptr;
-}
-
-void JobSystemThreadPool::DestroyBarrier(Barrier *inBarrier)
-{
-	JPH_PROFILE_FUNCTION();
-
-	// Check that no jobs are in the barrier
-	JPH_ASSERT(static_cast<BarrierImpl *>(inBarrier)->IsEmpty());
-
-	// Flag the barrier as unused
-	bool expected = true;
-	static_cast<BarrierImpl *>(inBarrier)->mInUse.compare_exchange_strong(expected, false);
-	JPH_ASSERT(expected);
-}
-
-void JobSystemThreadPool::WaitForJobs(Barrier *inBarrier)
-{
-	JPH_PROFILE_FUNCTION();
-
-	// Let our barrier implementation wait for the jobs
-	static_cast<BarrierImpl *>(inBarrier)->Wait();
 }
 
 uint JobSystemThreadPool::GetHead() const
@@ -482,12 +198,12 @@ void JobSystemThreadPool::QueueJobInternal(Job *inJob)
 			// We calculated the head outside of the loop, update head (and we also need to update tail to prevent it from passing head)
 			head = GetHead();
 			old_value = mTail;
-	
+
 			// Second check if there's space in the queue
 			if (old_value - head >= cQueueLength)
 			{
 				// Wake up all threads in order to ensure that they can clear any nullptrs they may not have processed yet
-				mSemaphore.Release((uint)mThreads.size()); 
+				mSemaphore.Release((uint)mThreads.size());
 
 				// Sleep a little (we have to wait for other threads to update their head pointer in order for us to be able to continue)
 				std::this_thread::sleep_for(std::chrono::microseconds(100));
@@ -499,7 +215,7 @@ void JobSystemThreadPool::QueueJobInternal(Job *inJob)
 		Job *expected_job = nullptr;
 		bool success = mQueue[old_value & (cQueueLength - 1)].compare_exchange_strong(expected_job, inJob);
 
-		// Regardless of who wrote the slot, we will update the tail (if the successful thread got scheduled out 
+		// Regardless of who wrote the slot, we will update the tail (if the successful thread got scheduled out
 		// after writing the pointer we still want to be able to continue)
 		mTail.compare_exchange_strong(old_value, old_value + 1);
 
@@ -542,39 +258,74 @@ void JobSystemThreadPool::QueueJobs(Job **inJobs, uint inNumJobs)
 	mSemaphore.Release(min(inNumJobs, (uint)mThreads.size()));
 }
 
-#if defined(JPH_PLATFORM_WINDOWS) && !defined(JPH_COMPILER_MINGW) // MinGW doesn't support __try/__except
+#if defined(JPH_PLATFORM_WINDOWS)
 
-// Sets the current thread name in MSVC debugger
-static void SetThreadName(const char *inName)
-{
-	#pragma pack(push, 8)
-
-	struct THREADNAME_INFO
+#if !defined(JPH_COMPILER_MINGW) // MinGW doesn't support __try/__except)
+	// Sets the current thread name in MSVC debugger
+	static void RaiseThreadNameException(const char *inName)
 	{
-		DWORD	dwType;			// Must be 0x1000.
-		LPCSTR	szName;			// Pointer to name (in user addr space).
-		DWORD	dwThreadID;		// Thread ID (-1=caller thread).
-		DWORD	dwFlags;		// Reserved for future use, must be zero.
-	};
+		#pragma pack(push, 8)
 
-	#pragma pack(pop)
+		struct THREADNAME_INFO
+		{
+			DWORD	dwType;			// Must be 0x1000.
+			LPCSTR	szName;			// Pointer to name (in user addr space).
+			DWORD	dwThreadID;		// Thread ID (-1=caller thread).
+			DWORD	dwFlags;		// Reserved for future use, must be zero.
+		};
 
-	THREADNAME_INFO info;
-	info.dwType = 0x1000;
-	info.szName = inName;
-	info.dwThreadID = (DWORD)-1;
-	info.dwFlags = 0;
+		#pragma pack(pop)
 
-	__try
-	{
-		RaiseException(0x406D1388, 0, sizeof(info) / sizeof(ULONG_PTR), (ULONG_PTR *)&info);
+		THREADNAME_INFO info;
+		info.dwType = 0x1000;
+		info.szName = inName;
+		info.dwThreadID = (DWORD)-1;
+		info.dwFlags = 0;
+
+		__try
+		{
+			RaiseException(0x406D1388, 0, sizeof(info) / sizeof(ULONG_PTR), (ULONG_PTR *)&info);
+		}
+		__except(EXCEPTION_EXECUTE_HANDLER)
+		{
+		}
 	}
-	__except(EXCEPTION_EXECUTE_HANDLER)
-	{
-	}
-}
+#endif // !JPH_COMPILER_MINGW
 
-#endif // JPH_PLATFORM_WINDOWS && !JPH_COMPILER_MINGW
+	static void SetThreadName(const char* inName)
+	{
+		JPH_SUPPRESS_WARNING_PUSH
+
+		// Suppress casting warning, it's fine here as GetProcAddress doesn't really return a FARPROC
+		JPH_CLANG_SUPPRESS_WARNING("-Wcast-function-type") // error : cast from 'FARPROC' (aka 'long long (*)()') to 'SetThreadDescriptionFunc' (aka 'long (*)(void *, const wchar_t *)') converts to incompatible function type
+		JPH_CLANG_SUPPRESS_WARNING("-Wcast-function-type-strict") // error : cast from 'FARPROC' (aka 'long long (*)()') to 'SetThreadDescriptionFunc' (aka 'long (*)(void *, const wchar_t *)') converts to incompatible function type
+		JPH_MSVC_SUPPRESS_WARNING(4191) // reinterpret_cast' : unsafe conversion from 'FARPROC' to 'SetThreadDescriptionFunc'. Calling this function through the result pointer may cause your program to fail
+
+		using SetThreadDescriptionFunc = HRESULT(WINAPI*)(HANDLE hThread, PCWSTR lpThreadDescription);
+		static SetThreadDescriptionFunc SetThreadDescription = reinterpret_cast<SetThreadDescriptionFunc>(GetProcAddress(GetModuleHandleW(L"Kernel32.dll"), "SetThreadDescription"));
+
+		JPH_SUPPRESS_WARNING_POP
+
+		if (SetThreadDescription)
+		{
+			wchar_t name_buffer[64] = { 0 };
+			if (MultiByteToWideChar(CP_UTF8, 0, inName, -1, name_buffer, sizeof(name_buffer) / sizeof(wchar_t) - 1) == 0)
+				return;
+
+			SetThreadDescription(GetCurrentThread(), name_buffer);
+		}
+#if !defined(JPH_COMPILER_MINGW)
+		else if (IsDebuggerPresent())
+			RaiseThreadNameException(inName);
+#endif // !JPH_COMPILER_MINGW
+	}
+#elif defined(JPH_PLATFORM_LINUX)
+	static void SetThreadName(const char *inName)
+	{
+		JPH_ASSERT(strlen(inName) < 16); // String will be truncated if it is longer
+		prctl(PR_SET_NAME, inName, 0, 0, 0);
+	}
+#endif // JPH_PLATFORM_LINUX
 
 void JobSystemThreadPool::ThreadMain(int inThreadIndex)
 {
@@ -582,15 +333,18 @@ void JobSystemThreadPool::ThreadMain(int inThreadIndex)
 	char name[64];
 	snprintf(name, sizeof(name), "Worker %d", int(inThreadIndex + 1));
 
-#if defined(JPH_PLATFORM_WINDOWS) && !defined(JPH_COMPILER_MINGW)
+#if defined(JPH_PLATFORM_WINDOWS) || defined(JPH_PLATFORM_LINUX)
 	SetThreadName(name);
-#endif // JPH_PLATFORM_WINDOWS && !JPH_COMPILER_MINGW
+#endif // JPH_PLATFORM_WINDOWS || JPH_PLATFORM_LINUX
 
 	// Enable floating point exceptions
 	FPExceptionsEnable enable_exceptions;
 	JPH_UNUSED(enable_exceptions);
 
 	JPH_PROFILE_THREAD_START(name);
+
+	// Call the thread init function
+	mThreadInitFunction(inThreadIndex);
 
 	atomic<uint> &head = mHeads[inThreadIndex];
 
@@ -601,13 +355,10 @@ void JobSystemThreadPool::ThreadMain(int inThreadIndex)
 
 		{
 			JPH_PROFILE("Executing Jobs");
-			TRACE_CPUPROFILER_EVENT_SCOPE_STR(*FString::Printf(TEXT("JobSystemThreadPool::ThreadMain Acquire")));
 
 			// Loop over the queue
 			while (head != mTail)
 			{
-				TRACE_CPUPROFILER_EVENT_SCOPE_STR(*FString::Printf(TEXT("JobSystemThreadPool::ThreadMain Loop")));
-
 				// Exchange any job pointer we find with a nullptr
 				atomic<Job *> &job = mQueue[head & (cQueueLength - 1)];
 				if (job.load() != nullptr)
@@ -615,8 +366,6 @@ void JobSystemThreadPool::ThreadMain(int inThreadIndex)
 					Job *job_ptr = job.exchange(nullptr);
 					if (job_ptr != nullptr)
 					{
-						TRACE_CPUPROFILER_EVENT_SCOPE_STR(*FString::Printf(TEXT("JobSystemThreadPool::ThreadMain Execute")));
-
 						// And execute it
 						job_ptr->Execute();
 						job_ptr->Release();
@@ -626,6 +375,9 @@ void JobSystemThreadPool::ThreadMain(int inThreadIndex)
 			}
 		}
 	}
+
+	// Call the thread exit function
+	mThreadExitFunction(inThreadIndex);
 
 	JPH_PROFILE_THREAD_END();
 }

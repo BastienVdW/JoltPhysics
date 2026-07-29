@@ -20,7 +20,7 @@ public class JoltPhysics : ModuleRules
 		PublicDefinitions.Add("WITH_JOLT_PHYSICS");
 
         PublicDefinitions.Add("JPH_SHARED_LIBRARY");
-        PublicDefinitions.Add("JPH_BUILD_SHARED_LIBRARY");
+        PrivateDefinitions.Add("JPH_BUILD_SHARED_LIBRARY");
 
 		if (Target.bUseGameplayDebugger)
         {

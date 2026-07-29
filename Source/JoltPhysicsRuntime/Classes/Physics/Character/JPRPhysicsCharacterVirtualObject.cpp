@@ -231,8 +231,9 @@ void FJPRPhysicsCharacterVirtualBody::InitCharacterVirtual(const FJPRPhysicsChar
 	// settings->mGravityFactor = Params.GravityFactor;
 	// settings->mMotionQuality = static_cast<EMotionQuality>(Params.MotionQuality);
 	// settings->mAllowSleeping = Params.bAllowSleeping;
-		
-	character = MakeShared<CharacterVirtual>(settings, RVec3::sZero(), Quat::sIdentity(), 0, &GetPhysicsSystem(), NewBodyID.Get());	
+	settings->mInnerBodyIDOverride = *NewBodyID.Get();
+
+	character = MakeShared<CharacterVirtual>(settings, RVec3::sZero(), Quat::sIdentity(), 0, &GetPhysicsSystem());
 
 	SetBodyID(*NewBodyID.Get());
 
