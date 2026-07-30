@@ -97,6 +97,8 @@
 //@ BASTIEN ADD
 #elif defined(JPH_PLATFORM_OUNCE)
 	// Correct define already defined by JoltPhysics.Build.cs, nothing more to detect
+#elif defined(JPH_PLATFORM_PROSPERO)
+	// Correct define already defined by JoltPhysics.Build.cs, nothing more to detect
 //@ BASTIEN END
 #endif
 
@@ -462,6 +464,8 @@
 //@ BASTIEN ADD
 #elif defined(JPH_PLATFORM_OUNCE)
 	#include <Jolt/Core/PlatformOunce.h>
+#elif defined(JPH_PLATFORM_PROSPERO)
+	#include <Jolt/Core/PlatformProspero.h>
 //@ BASTIEN END
 #else
 	#error Unknown platform
