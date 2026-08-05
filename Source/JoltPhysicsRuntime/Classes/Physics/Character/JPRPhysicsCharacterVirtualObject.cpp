@@ -104,7 +104,7 @@ FVector FJPRPhysicsCharacterVirtualBody::GetLinearVelocityPerSecond() const
 	return FJPRPhysicsBody::GetLinearVelocityPerSecond();
 }
 
-void FJPRPhysicsCharacterVirtualBody::SetPosition(const FVector& Position) const
+void FJPRPhysicsCharacterVirtualBody::SetPosition(const FVector& Position)
 {
 #if WITH_JOLT_PHYSICS
 	if (character.IsValid())
@@ -117,7 +117,7 @@ void FJPRPhysicsCharacterVirtualBody::SetPosition(const FVector& Position) const
 #endif // WITH_JOLT_PHYSICS
 }
 
-void FJPRPhysicsCharacterVirtualBody::SetRotation(const FQuat& Rotation) const
+void FJPRPhysicsCharacterVirtualBody::SetRotation(const FQuat& Rotation)
 {
 #if WITH_JOLT_PHYSICS
 	if (character.IsValid())
@@ -128,7 +128,7 @@ void FJPRPhysicsCharacterVirtualBody::SetRotation(const FQuat& Rotation) const
 #endif // WITH_JOLT_PHYSICS
 }
 
-void FJPRPhysicsCharacterVirtualBody::SetPositionAndRotation(const FVector& Position, const FQuat& Rotation) const
+void FJPRPhysicsCharacterVirtualBody::SetPositionAndRotation(const FVector& Position, const FQuat& Rotation)
 {
 #if WITH_JOLT_PHYSICS
 	if (character.IsValid())

@@ -92,7 +92,7 @@ void FJPRPhysicsBody::ReleasePhysicsObject()
 #endif // WITH_JOLT_PHYSICS
 }
 
-void FJPRPhysicsBody::SetPosition(const FVector& Position) const
+void FJPRPhysicsBody::SetPosition(const FVector& Position) 
 {
 #if WITH_JOLT_PHYSICS
 	if (body_id.IsValid())
@@ -103,7 +103,7 @@ void FJPRPhysicsBody::SetPosition(const FVector& Position) const
 #endif // WITH_JOLT_PHYSICS
 }
 
-void FJPRPhysicsBody::SetRotation(const FQuat& Rotation) const
+void FJPRPhysicsBody::SetRotation(const FQuat& Rotation)
 {
 #if WITH_JOLT_PHYSICS
 	if (body_id.IsValid())
@@ -128,7 +128,7 @@ void FJPRPhysicsBody::GetPositionAndRotation(FVector& OutPosition, FQuat& OutRot
 #endif // WITH_JOLT_PHYSICS
 }
 
-void FJPRPhysicsBody::SetPositionAndRotation(const FVector& Position, const FQuat& Rotation) const
+void FJPRPhysicsBody::SetPositionAndRotation(const FVector& Position, const FQuat& Rotation)
 {
 #if WITH_JOLT_PHYSICS
 	if (body_id.IsValid())
@@ -156,7 +156,7 @@ FTransform FJPRPhysicsBody::GetTransform() const
 	return FTransform(Rotation, Position);
 }
 
-void FJPRPhysicsBody::SetRotation(const FRotator& Rotation) const
+void FJPRPhysicsBody::SetRotation(const FRotator& Rotation)
 {
 	SetRotation(Rotation.Quaternion());
 }
