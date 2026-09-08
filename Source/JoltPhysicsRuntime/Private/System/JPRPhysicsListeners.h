@@ -24,7 +24,7 @@ public:
 class FJPRContactListener final : public JPH::ContactListener
 {
 public:
-	virtual ValidateResult OnContactValidate(const JPH::Body& Body1, const JPH::Body& Body2, JPH::RVec3Arg BaseOffset,
+	virtual JPH::ValidateResult OnContactValidate(const JPH::Body& Body1, const JPH::Body& Body2, JPH::RVec3Arg BaseOffset,
 		const JPH::CollideShapeResult& CollisionResult) override;
 	virtual void OnContactAdded(const JPH::Body& Body1, const JPH::Body& Body2, const JPH::ContactManifold& Manifold,
 		JPH::ContactSettings& Settings) override;

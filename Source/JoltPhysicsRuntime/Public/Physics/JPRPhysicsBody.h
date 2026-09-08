@@ -49,13 +49,13 @@ public:
 	virtual void Desactivate();
 	virtual void ReleasePhysicsObject();
 
-	virtual void SetPosition(const FVector& Position) const;
-	virtual void SetRotation(const FQuat& Rotation) const;
+	virtual void SetPosition(const FVector& Position);
+	virtual void SetRotation(const FQuat& Rotation);
 	virtual void GetPositionAndRotation(FVector& OutPosition, FQuat& OutRotation) const;
-	virtual void SetPositionAndRotation(const FVector& Position, const FQuat& Rotation) const;
+	virtual void SetPositionAndRotation(const FVector& Position, const FQuat& Rotation);
 	void GetPosition(FVector& OutPosition) const;
 	FTransform GetTransform() const;
-	void SetRotation(const FRotator& Rotation) const;
+	void SetRotation(const FRotator& Rotation);
 	void GetRotation(FQuat& OutRotation) const;
 	FVector GetForwardVector() const;
 	FVector GetRightVector() const;

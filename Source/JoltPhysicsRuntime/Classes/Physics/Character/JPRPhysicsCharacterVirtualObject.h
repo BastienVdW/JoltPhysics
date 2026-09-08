@@ -42,9 +42,9 @@ public:
 	virtual void AddLinearVelocityPerSecond(const FVector& LinearVelocity) override;
 	virtual void SetLinearVelocityPerSecond(const FVector& LinearVelocity) override;
 	virtual FVector GetLinearVelocityPerSecond() const override;
-	virtual void SetPosition(const FVector& Position) const override;
-	virtual void SetRotation(const FQuat& Rotation) const override;
-	virtual void SetPositionAndRotation(const FVector& Position, const FQuat& Rotation) const override;
+	virtual void SetPosition(const FVector& Position) override;
+	virtual void SetRotation(const FQuat& Rotation) override;
+	virtual void SetPositionAndRotation(const FVector& Position, const FQuat& Rotation) override;
 	virtual void GetPositionAndRotation(FVector& OutPosition, FQuat& OutRotation) const override;
 
 	virtual void DrawDebugShape(const UWorld* World, const FColor& Color) const override;
